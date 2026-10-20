@@ -173,3 +173,46 @@ handler, the SQLite layer, the signed tokens and the refund execution path.
   (`astimezone(tz=None)`); changed to UTC so round-trips are stable.
 - `tests/paypal/test_client_stub.py` imported two exceptions from
   `backend.paypal`; they live in `contracts`. Import corrected.
+
+## 9. Contrast (WCAG AA), light and dark
+
+`python scripts/contrast_check.py` parses the tokens straight out of
+`frontend/src/styles.css`, so the check cannot drift from the stylesheet.
+
+```
+[light]
+  body text              #1b1a17 on #fbfaf8  16.68:1  (min 4.5)  ok
+  body text on card      #1b1a17 on #ffffff  17.40:1  (min 4.5)  ok
+  muted text             #5c5952 on #fbfaf8   6.70:1  (min 4.5)  ok
+  muted text on card     #5c5952 on #ffffff   6.99:1  (min 4.5)  ok
+  button label           #ffffff on #7a4b2a   7.32:1  (min 4.5)  ok
+  error text             #a4231b on #fbfaf8   7.10:1  (min 4.5)  ok
+  error text on card     #a4231b on #ffffff   7.41:1  (min 4.5)  ok
+  card border            #8f8a7e on #fbfaf8   3.30:1  (min 3.0)  ok
+
+[dark]
+  body text              #f3efe6 on #14130f  16.20:1  (min 4.5)  ok
+  body text on card      #f3efe6 on #1d1b16  14.99:1  (min 4.5)  ok
+  muted text             #b6b0a3 on #14130f   8.61:1  (min 4.5)  ok
+  muted text on card     #b6b0a3 on #1d1b16   7.97:1  (min 4.5)  ok
+  button label           #1b1a17 on #e2b07a   8.89:1  (min 4.5)  ok
+  error text             #ff8f85 on #14130f   8.43:1  (min 4.5)  ok
+  error text on card     #ff8f85 on #1d1b16   7.80:1  (min 4.5)  ok
+  card border            #6f6a5c on #14130f   3.44:1  (min 3.0)  ok
+
+OK: every checked pair meets WCAG AA in light and dark.
+```
+
+This evidences **colour contrast only**. It does not evidence keyboard traversal,
+focus visibility, or screen-reader labelling — those still require a real browser
+pass and remain unverified.
+
+## 10. Still unverified at the end of this pass
+
+| item | status |
+|---|---|
+| `npm run build` | blocked: no `frontend/tsconfig.json`; architect role may not write `**/tsconfig*.json` (verifier-owned config zone) |
+| `render.yaml` | blocked: `render.yaml` is in the config zone; architect role may not write it |
+| Keyboard-only traversal, focus rings, screen-reader labels | not run — no browser pass |
+| Live PayPal refund / live Anthropic call | blocked on credentials, as in §7 |
+
