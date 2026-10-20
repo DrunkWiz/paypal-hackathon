@@ -94,6 +94,18 @@ export const api = {
       `/api/merchants/${encodeURIComponent(merchantId)}/approvals`,
     ),
 
+  approveApproval: (merchantId: string, approvalId: number) =>
+    request<{ status: string }>(
+      `/api/merchants/${encodeURIComponent(merchantId)}/approvals/${approvalId}/approve`,
+      { method: "POST" },
+    ),
+
+  rejectApproval: (merchantId: string, approvalId: number) =>
+    request<{ status: string }>(
+      `/api/merchants/${encodeURIComponent(merchantId)}/approvals/${approvalId}/reject`,
+      { method: "POST" },
+    ),
+
   disputes: (merchantId: string) =>
     request<{ disputes: Dispute[] }>(
       `/api/merchants/${encodeURIComponent(merchantId)}/disputes`,

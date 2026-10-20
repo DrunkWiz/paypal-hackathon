@@ -256,16 +256,61 @@ export default function MerchantPage() {
             <p className="muted">Nothing is waiting for a person.</p>
           ) : (
             <ul className="plain">
-              {approvals.map((row, index) => (
-                <li key={String(row.id ?? index)}>
-                  Case <code>{String(row.case_id)}</code> ·{" "}
-                  {formatMoney(
-                    Number(row.amount_minor ?? 0),
-                    String(row.currency ?? currency),
-                  )}{" "}
-                  · {String(row.status)} · {String(row.reason ?? "")}
-                </li>
-              ))}
+              {approvals.map((row, index) => {
+                const approvalId = Number(row.id ?? 0);
+                const isPending = String(row.status) === "pending";
+
+                const act = (action: "approve" | "reject") => {
+                  void (async () => {
+                    setError(null);
+                    try {
+                      if (action === "approve") {
+                        await api.approveApproval(merchantId, approvalId);
+                      } else {
+                        await api.rejectApproval(merchantId, approvalId);
+                      }
+                      await load(merchantId);
+                    } catch (err) {
+                      setError(
+                        err instanceof Error ? err.message : String(err),
+                      );
+                    }
+                  })();
+                };
+
+                return (
+                  <li key={String(row.id ?? index)}>
+                    <div className="row between">
+                      <span>
+                        Case <code>{String(row.case_id)}</code> ·{" "}
+                        {formatMoney(
+                          Number(row.amount_minor ?? 0),
+                          String(row.currency ?? currency),
+                        )}{" "}
+                        · {String(row.status)} · {String(row.reason ?? "")}
+                      </span>
+                      {isPending ? (
+                        <span className="row">
+                          <button
+                            type="button"
+                            className="btn small primary"
+                            onClick={() => act("approve")}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="btn small"
+                            onClick={() => act("reject")}
+                          >
+                            Reject
+                          </button>
+                        </span>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
