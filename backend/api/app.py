@@ -508,6 +508,36 @@ def create_app(
         finally:
             connection.close()
 
+    @app.post("/api/merchants/{merchant_id}/approvals/{approval_id}/approve")
+    def approve_approval(merchant_id: str, approval_id: int) -> Dict[str, Any]:
+        from . import approvals as approvals_service
+
+        connection = conn()
+        try:
+            require_merchant(connection, merchant_id)
+            return approvals_service.approve_refund(
+                connection,
+                app.state.gateway,
+                merchant_id,
+                approval_id,
+                app.state.now(),
+            )
+        finally:
+            connection.close()
+
+    @app.post("/api/merchants/{merchant_id}/approvals/{approval_id}/reject")
+    def reject_approval(merchant_id: str, approval_id: int) -> Dict[str, Any]:
+        from . import approvals as approvals_service
+
+        connection = conn()
+        try:
+            require_merchant(connection, merchant_id)
+            return approvals_service.reject_approval(
+                connection, merchant_id, approval_id
+            )
+        finally:
+            connection.close()
+
     @app.get("/api/merchants/{merchant_id}/disputes")
     def disputes(merchant_id: str) -> Dict[str, Any]:
         connection = conn()

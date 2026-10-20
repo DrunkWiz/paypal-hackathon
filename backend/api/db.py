@@ -98,6 +98,19 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     received_at TEXT NOT NULL
 );
 
+-- A refund the gateway may have accepted even though every call timed out.
+-- Rows here are reconciled on the next attempt with the same idempotency key.
+CREATE TABLE IF NOT EXISTS unconfirmed_refunds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    merchant_id TEXT NOT NULL,
+    case_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    amount_minor INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    rule_id TEXT,
+    created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_cases_merchant ON cases(merchant_id);
 CREATE INDEX IF NOT EXISTS idx_audit_merchant ON audit(merchant_id);
 CREATE INDEX IF NOT EXISTS idx_audit_case ON audit(case_id);

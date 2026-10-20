@@ -232,25 +232,48 @@ export default function ResolvePage() {
       ) : null}
 
       {stage === "accepted" && receipt ? (
-        <section className="card" aria-labelledby="receipt-heading">
-          <h2 id="receipt-heading">You’re all set</h2>
-          <p>
-            We refunded{" "}
-            <strong>
-              {formatMoney(
-                receipt.amount_minor ?? 0,
-                receipt.currency ?? session.currency,
-              )}
-            </strong>
-            .
-          </p>
-          <p>
-            Refund id: <code>{receipt.refund_id ?? "pending"}</code>
-          </p>
-          <p className="muted small">
-            It usually lands in your account within 3–5 business days.
-          </p>
-        </section>
+        receipt.status === "unconfirmed" ? (
+          <section className="card" aria-labelledby="receipt-heading">
+            <h2 id="receipt-heading">We’re not sure yet</h2>
+            <p>
+              The payment provider timed out, so we can’t confirm whether the
+              refund of{" "}
+              <strong>
+                {formatMoney(
+                  receipt.amount_minor ?? 0,
+                  receipt.currency ?? session.currency,
+                )}
+              </strong>{" "}
+              went through. Nothing can be refunded twice.
+            </p>
+            <button type="button" className="btn primary" onClick={accept}>
+              Check again
+            </button>
+            <p className="muted small" role="status" aria-live="polite">
+              {progress}
+            </p>
+          </section>
+        ) : (
+          <section className="card" aria-labelledby="receipt-heading">
+            <h2 id="receipt-heading">You’re all set</h2>
+            <p>
+              We refunded{" "}
+              <strong>
+                {formatMoney(
+                  receipt.amount_minor ?? 0,
+                  receipt.currency ?? session.currency,
+                )}
+              </strong>
+              .
+            </p>
+            <p>
+              Refund id: <code>{receipt.refund_id ?? "pending"}</code>
+            </p>
+            <p className="muted small">
+              It usually lands in your account within 3–5 business days.
+            </p>
+          </section>
+        )
       ) : null}
 
       {stage === "needs_approval" && receipt ? (

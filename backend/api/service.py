@@ -41,6 +41,8 @@ __all__ = [
     "get_latest_decision",
     "set_case_status",
     "execute_refund",
+    "record_unconfirmed",
+    "clear_unconfirmed",
     "queue_approval",
     "today_history",
     "snapshot_from_order",
@@ -254,6 +256,76 @@ def set_case_status(conn, case_id: str, status: str) -> None:
 # -- execution --------------------------------------------------------------
 
 
+def record_unconfirmed(
+    conn,
+    merchant_id: str,
+    case_id: str,
+    idempotency_key: str,
+    amount_minor: int,
+    currency: str,
+    rule_id,
+    now: datetime,
+) -> None:
+    """Persist a refund attempt whose outcome the gateway never confirmed."""
+    conn.execute(
+        "INSERT INTO unconfirmed_refunds "
+        "(merchant_id, case_id, idempotency_key, amount_minor, currency, "
+        " rule_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(idempotency_key) DO UPDATE SET "
+        " amount_minor=excluded.amount_minor",
+        (
+            merchant_id,
+            case_id,
+            idempotency_key,
+            int(amount_minor),
+            currency,
+            rule_id,
+            iso(now),
+        ),
+    )
+    conn.commit()
+
+
+def clear_unconfirmed(conn, idempotency_key: str) -> None:
+    conn.execute(
+        "DELETE FROM unconfirmed_refunds WHERE idempotency_key = ?",
+        (idempotency_key,),
+    )
+    conn.commit()
+
+
+def record_audit(
+    conn,
+    merchant_id: str,
+    case_row,
+    decision_row,
+    refund,
+    idempotency_key: str,
+    now: datetime,
+) -> None:
+    """Write the audit row naming the rule that fired, and clear any unknown."""
+    conn.execute(
+        "INSERT INTO audit "
+        "(merchant_id, case_id, order_id, capture_id, refund_id, amount_minor, "
+        " currency, rule_id, idempotency_key, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            merchant_id,
+            case_row["id"],
+            case_row["order_id"],
+            case_row["capture_id"],
+            refund.refund_id,
+            int(refund.amount_minor),
+            refund.currency,
+            decision_row["rule_id"],
+            idempotency_key,
+            iso(now),
+        ),
+    )
+    conn.commit()
+    clear_unconfirmed(conn, idempotency_key)
+
+
 def queue_approval(conn, merchant_id: str, case_row, decision_row, now: datetime) -> None:
     conn.execute(
         "INSERT INTO approvals "
@@ -318,9 +390,38 @@ def execute_refund(
     except GatewayTimeout:
         # The gateway may have accepted before the timeout. Retry with the same
         # key: it returns the original refund instead of creating a second one.
-        refund = gateway.refund_capture(
-            case_row["capture_id"], amount_minor, currency, idempotency_key
-        )
+        try:
+            refund = gateway.refund_capture(
+                case_row["capture_id"], amount_minor, currency, idempotency_key
+            )
+        except GatewayTimeout:
+            # Both calls timed out, so the outcome is genuinely unknown. Record
+            # the attempt so money can never move silently, and let the next
+            # attempt reconcile it with the same idempotency key.
+            record_unconfirmed(
+                conn,
+                merchant_id,
+                case_id,
+                idempotency_key,
+                amount_minor,
+                currency,
+                decision_row["rule_id"],
+                now,
+            )
+            set_case_status(conn, case_id, "unconfirmed")
+            return {
+                "status": "unconfirmed",
+                "case_id": case_id,
+                "idempotency_key": idempotency_key,
+                "amount_minor": amount_minor,
+                "currency": currency,
+                "rule_id": decision_row["rule_id"],
+                "message": (
+                    "The payment gateway timed out twice. The refund may have "
+                    "been accepted. Accept again to reconcile; the idempotency "
+                    "key guarantees at most one refund."
+                ),
+            }
 
     conn.execute(
         "INSERT INTO audit "
@@ -341,6 +442,7 @@ def execute_refund(
         ),
     )
     conn.commit()
+    clear_unconfirmed(conn, idempotency_key)
     set_case_status(conn, case_id, "refunded")
 
     return {

@@ -294,6 +294,36 @@ Every executed refund writes an audit row naming the rule that fired.
 
 → `200` `{ "approvals": [ … ] }`
 
+### `POST /api/merchants/{merchant_id}/approvals/{approval_id}/approve`
+
+Executes the queued refund. The amount is re-clamped against the **live** caps
+before executing, so an approval can never refund more than the current
+per-refund cap, remaining refundable balance, or remaining daily budget.
+
+→ `200`
+
+```json
+{
+  "status": "refunded",
+  "approval_id": 1,
+  "case_id": "c_…",
+  "refund_id": "REFUND-0001",
+  "amount_minor": 1000,
+  "currency": "USD",
+  "rule_id": "damaged-or-not-as-described"
+}
+```
+
+Possible `status` values: `refunded`, `already_refunded`, `blocked` (no budget
+remains), `unconfirmed` (the gateway timed out twice — reconciling, no money is
+refunded twice), or the approval's existing terminal status.
+
+### `POST /api/merchants/{merchant_id}/approvals/{approval_id}/reject`
+
+→ `200` `{ "status": "rejected", "approval_id": 1, "case_id": "c_…" }`
+
+Moves no money and marks the case `declined`.
+
 ### `GET /api/merchants/{merchant_id}/disputes`
 
 → `200`
