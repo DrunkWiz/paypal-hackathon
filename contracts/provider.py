@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Generic, Mapping, Protocol, TypeVar
+from typing import Any, Generic, List, Mapping, Protocol, TypeVar
 from typing import runtime_checkable
 
 from .case import Case

@@ -9,14 +9,8 @@ class SettleError(Exception):
 class PayPalError(SettleError):
     """PayPal API error with response details."""
 
-    def __init__(
-        self,
-        message: str,
-        code: str,
-        status: int,
-        body: str,
-    ) -> None:
-        super().__init__(message)
+    def __init__(self, code: str, status: int, body: str, message: str = "") -> None:
+        super().__init__(message or f"PayPal error {code} (HTTP {status})")
         self.code = code
         self.status = status
         self.body = body
