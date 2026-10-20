@@ -106,6 +106,8 @@ pytest tests/agent/test_evals.py -q
 pytest tests/api/test_tokens.py -q
 pytest tests/api/test_flow.py -q
 pytest tests/api/test_routes.py -q
+pytest tests/api/test_approvals.py -q
+pytest tests/api/test_demo.py -q
 ```
 
 Adversarial check (20 injection-style complaints against a deliberately tight

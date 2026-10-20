@@ -65,7 +65,9 @@ Run serially, one file at a time, from the repository root.
 | `tests/api/test_tokens.py` | 8 passed |
 | `tests/api/test_flow.py` | 6 passed |
 | `tests/api/test_routes.py` | 11 passed |
-| **total** | **387 passed, 0 failed** |
+| `tests/api/test_approvals.py` | 5 passed |
+| `tests/api/test_demo.py` | 3 passed |
+| **total** | **395 passed, 0 failed** |
 
 ## 4. The invariant suite actually fails when the guarantee is removed
 
