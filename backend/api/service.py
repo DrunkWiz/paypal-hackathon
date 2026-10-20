@@ -423,26 +423,9 @@ def execute_refund(
                 ),
             }
 
-    conn.execute(
-        "INSERT INTO audit "
-        "(merchant_id, case_id, order_id, capture_id, refund_id, amount_minor, "
-        " currency, rule_id, idempotency_key, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            merchant_id,
-            case_id,
-            case_row["order_id"],
-            case_row["capture_id"],
-            refund.refund_id,
-            int(refund.amount_minor),
-            refund.currency,
-            decision_row["rule_id"],
-            idempotency_key,
-            iso(now),
-        ),
+    record_audit(
+        conn, merchant_id, case_row, decision_row, refund, idempotency_key, now
     )
-    conn.commit()
-    clear_unconfirmed(conn, idempotency_key)
     set_case_status(conn, case_id, "refunded")
 
     return {
