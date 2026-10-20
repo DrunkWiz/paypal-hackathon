@@ -137,14 +137,21 @@ python scripts/adversarial_check.py
 
 **UNVERIFIED — blocked on credentials**
 
-- Live PayPal sandbox calls. Run later with:
+- Live PayPal sandbox and live Anthropic calls. The exact command:
+
   ```bash
-  SETTLE_PAYPAL_CLIENT_ID=... SETTLE_PAYPAL_CLIENT_SECRET=... \
-  python -c "..."   # see backend/paypal/client.py; not exercised here
+  SETTLE_PAYPAL_CLIENT_ID=... \
+  SETTLE_PAYPAL_CLIENT_SECRET=... \
+  SETTLE_PAYPAL_ORDER_ID=<a sandbox order id> \
+  python scripts/live_smoke.py
+
+  # optionally also exercise the model client:
+  SETTLE_ANTHROPIC_API_KEY=... python scripts/live_smoke.py
   ```
-- Live Anthropic calls (`backend/agent/anthropic.py`). The request shape is
-  asserted with a stub transport; nothing here has been run against
-  `api.anthropic.com`.
+
+  With no credentials the script prints exactly which variables are missing and
+  exits 2 without touching the network. Nothing here has been run against
+  `api-m.sandbox.paypal.com` or `api.anthropic.com`.
 
 ## Layout
 
