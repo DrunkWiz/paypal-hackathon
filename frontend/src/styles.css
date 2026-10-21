@@ -1948,3 +1948,795 @@ ul.plain {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   15. Takweem-Inspired Architectural Landing Page (.tk-*)
+   ========================================================================== */
+.tk-page {
+  min-height: 100vh;
+  background-color: var(--bg-canvas);
+  background-image: radial-gradient(
+    var(--border-subtle) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+  color: var(--fg-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 1. Top Announcement Bar */
+.tk-announce-bar {
+  background: var(--fg-primary);
+  color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-hairline);
+  font-size: 12px;
+  padding: 7px 20px;
+}
+
+.tk-announce-inner {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  text-align: center;
+}
+
+.tk-announce-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.tk-announce-text {
+  opacity: 0.92;
+  font-weight: 450;
+}
+
+.tk-announce-link {
+  color: var(--bg-surface);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 2. Floating Pill Navigation Header */
+.tk-header-wrap {
+  position: sticky;
+  top: 12px;
+  z-index: 40;
+  padding: 0 20px;
+  margin-top: 14px;
+}
+
+.tk-navbar {
+  max-width: 1320px;
+  margin: 0 auto;
+  min-height: 54px;
+  padding: 8px 14px 8px 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.tk-brand-row {
+  display: flex;
+  align-items: center;
+}
+
+.tk-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--fg-primary);
+}
+
+.tk-brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tk-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.tk-brand-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-muted);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+}
+
+.tk-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.tk-nav-links a {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-secondary);
+  text-decoration: none;
+  transition: color 0.12s ease;
+}
+
+.tk-nav-links a:hover {
+  color: var(--fg-primary);
+}
+
+.tk-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 3. Architectural Hairline Grid Container */
+.tk-grid-shell {
+  max-width: 1320px;
+  width: calc(100% - 40px);
+  margin: 18px auto 48px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+.tk-hero-bay {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.08fr 0.92fr;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tk-crosshair {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1;
+  color: var(--fg-muted);
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+}
+
+.tk-crosshair.tl {
+  top: 10px;
+  left: 12px;
+}
+.tk-crosshair.tr {
+  top: 10px;
+  right: 12px;
+}
+.tk-crosshair.bl {
+  bottom: 10px;
+  left: 12px;
+}
+.tk-crosshair.br {
+  bottom: 10px;
+  right: 12px;
+}
+
+.tk-hero-left {
+  padding: 48px 42px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.tk-eyebrow-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fg-secondary);
+}
+
+.tk-eyebrow-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.tk-hero-title {
+  font-size: clamp(32px, 3.6vw, 48px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  color: var(--fg-primary);
+}
+
+.tk-hero-accent {
+  display: block;
+  color: var(--accent);
+}
+
+.tk-hero-lead {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--fg-secondary);
+  max-width: 58ch;
+}
+
+.tk-hero-ctas {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tk-btn-lg {
+  height: 40px;
+  padding: 0 18px;
+  font-size: 13.5px;
+}
+
+.tk-telemetry-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.tk-telemetry-cell {
+  padding: 10px 12px;
+  border-right: 1px solid var(--border-hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tk-telemetry-cell:last-child {
+  border-right: none;
+}
+
+.tk-telemetry-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.tk-telemetry-val {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-primary);
+}
+
+/* 4. Right Hero 3D PayPal Stage */
+.tk-hero-right {
+  padding: 28px;
+  background: radial-gradient(
+    circle at 50% 42%,
+    var(--accent-subtle),
+    var(--bg-subtle) 72%
+  );
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.tk-stage-card {
+  width: 100%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+.tk-stage-topbar {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-hairline);
+  background: var(--bg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tk-stage-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tk-stage-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.tk-stage-title {
+  font-size: 11px;
+  color: var(--fg-muted);
+  letter-spacing: 0.04em;
+}
+
+.tk-stage-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--status-success-fg);
+}
+
+.tk-stage-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-success-dot);
+}
+
+.tk-canvas-wrap {
+  position: relative;
+  height: 330px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.tk-three-mount {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.tk-three-mount:active {
+  cursor: grabbing;
+}
+
+.tk-webgl-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.tk-stage-hud {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  padding: 10px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  pointer-events: none;
+}
+
+.tk-stage-hud-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tk-stage-hud-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+}
+
+.tk-stage-hud-val {
+  font-size: 12px;
+  color: var(--fg-primary);
+}
+
+.tk-stage-switcher {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--border-hairline);
+  background: var(--bg-subtle);
+}
+
+.tk-stage-btn {
+  height: auto;
+  padding: 10px 12px;
+  border: none;
+  border-right: 1px solid var(--border-hairline);
+  border-radius: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tk-stage-btn:last-child {
+  border-right: none;
+}
+
+.tk-stage-btn:hover {
+  background: var(--bg-hover);
+}
+
+.tk-stage-btn.active {
+  background: var(--bg-surface);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.tk-stage-btn-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.tk-stage-btn-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fg-primary);
+}
+
+/* 5. Section Bays & 4-Stage Pipeline */
+.tk-section-bay {
+  padding: 40px 42px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tk-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 26px;
+}
+
+.tk-section-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.tk-section-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--fg-primary);
+}
+
+.tk-section-sub {
+  font-size: 13.5px;
+  color: var(--fg-secondary);
+  max-width: 48ch;
+  line-height: 1.55;
+}
+
+.tk-pipeline-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.tk-pipe-card {
+  padding: 20px;
+  border-right: 1px solid var(--border-hairline);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tk-pipe-card:last-child {
+  border-right: none;
+}
+
+.tk-pipe-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tk-pipe-step {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg-muted);
+}
+
+.tk-pipe-card h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg-primary);
+}
+
+.tk-pipe-card p {
+  font-size: 13px;
+  color: var(--fg-secondary);
+  line-height: 1.5;
+}
+
+.tk-pipe-code {
+  padding: 8px 10px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-xs);
+  font-size: 11.5px;
+  color: var(--fg-secondary);
+  overflow-x: auto;
+}
+
+/* 6. Takweem Bento Grid */
+.tk-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.tk-bento-cell {
+  padding: 24px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tk-bento-cell.span-7 {
+  grid-column: span 7;
+}
+
+.tk-bento-cell.span-5 {
+  grid-column: span 5;
+}
+
+.tk-bento-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tk-bento-cell h3 {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.tk-attack-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tk-attack-tab {
+  height: 30px;
+  padding: 0 11px;
+  font-size: 12px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--fg-secondary);
+}
+
+.tk-attack-tab.active {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+
+.tk-attack-console {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tk-attack-prompt {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tk-attack-prompt p {
+  font-size: 12.5px;
+  color: var(--fg-primary);
+}
+
+.tk-attack-outcome {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tk-invariant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tk-invariant-row {
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 7. Interactive Cap Simulator */
+.tk-sim-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.tk-sim-controls,
+.tk-sim-output {
+  padding: 22px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tk-sim-numbers {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
+}
+
+.tk-sim-big {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.tk-sim-arrow {
+  font-size: 20px;
+  color: var(--fg-muted);
+}
+
+/* 8. Footer Bay */
+.tk-footer-bay {
+  padding: 36px 42px;
+  background: var(--bg-subtle);
+}
+
+.tk-footer-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.tk-footer-cta h2 {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 1080px) {
+  .tk-hero-bay {
+    grid-template-columns: 1fr;
+  }
+  .tk-hero-left {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 32px 24px;
+  }
+  .tk-pipeline-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tk-pipe-card:nth-child(2) {
+    border-right: none;
+  }
+  .tk-pipe-card:nth-child(1),
+  .tk-pipe-card:nth-child(2) {
+    border-bottom: 1px solid var(--border-hairline);
+  }
+  .tk-bento-cell.span-7,
+  .tk-bento-cell.span-5 {
+    grid-column: span 12;
+  }
+  .tk-sim-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .tk-nav-links {
+    display: none;
+  }
+  .tk-telemetry-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tk-pipeline-cards {
+    grid-template-columns: 1fr;
+  }
+  .tk-pipe-card {
+    border-right: none;
+    border-bottom: 1px solid var(--border-hairline);
+  }
+  .tk-attack-outcome {
+    grid-template-columns: 1fr;
+  }
+  .tk-section-bay,
+  .tk-footer-bay {
+    padding: 28px 20px;
+  }
+}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api } from "./api";
+import LandingPage from "./pages/LandingPage";
 import MerchantPage from "./pages/MerchantPage";
 import ResolvePage from "./pages/ResolvePage";
 
@@ -144,7 +145,7 @@ export default function App() {
         <Route
           path="/"
           element={
-            <MerchantPage
+            <LandingPage
               theme={theme}
               onCycleTheme={cycleTheme}
               onOpenCustomerFlow={openSampleCustomerFlow}
