@@ -173,7 +173,7 @@ export default function MerchantPage() {
       ) : null}
 
       <div className="tabs" role="tablist" aria-label="Merchant views">
-        {TABS.map((item) => (
+        {TABS.map((item, index) => (
           <button
             key={item.id}
             type="button"
@@ -183,6 +183,24 @@ export default function MerchantPage() {
             aria-controls={`panel-${item.id}`}
             className={tab === item.id ? "tab active" : "tab"}
             onClick={() => setTab(item.id)}
+            onKeyDown={(event) => {
+              let nextIndex: number | null = null;
+              if (event.key === "ArrowRight") {
+                nextIndex = (index + 1) % TABS.length;
+              } else if (event.key === "ArrowLeft") {
+                nextIndex = (index - 1 + TABS.length) % TABS.length;
+              } else if (event.key === "Home") {
+                nextIndex = 0;
+              } else if (event.key === "End") {
+                nextIndex = TABS.length - 1;
+              }
+              if (nextIndex !== null) {
+                event.preventDefault();
+                const nextTab = TABS[nextIndex];
+                setTab(nextTab.id);
+                document.getElementById(`tab-${nextTab.id}`)?.focus();
+              }
+            }}
           >
             {item.label}
           </button>
@@ -231,6 +249,7 @@ export default function MerchantPage() {
                       <button
                         type="button"
                         className="btn small"
+                        aria-label={`Details for ${row.order_id}`}
                         onClick={() => void openCase(row.id)}
                       >
                         Details
@@ -294,6 +313,7 @@ export default function MerchantPage() {
                           <button
                             type="button"
                             className="btn small primary"
+                            aria-label={`Approve case ${String(row.case_id)}`}
                             onClick={() => act("approve")}
                           >
                             Approve
@@ -301,6 +321,7 @@ export default function MerchantPage() {
                           <button
                             type="button"
                             className="btn small"
+                            aria-label={`Reject case ${String(row.case_id)}`}
                             onClick={() => act("reject")}
                           >
                             Reject

@@ -17,6 +17,7 @@ htmlcov/
 node_modules/
 frontend/dist/
 frontend/node_modules/
+*.tsbuildinfo
 *.local
 
 # Env / secrets

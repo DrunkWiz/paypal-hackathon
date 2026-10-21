@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -99,6 +100,17 @@ def create_app(
     db_module.init_db(db_path)
 
     app = FastAPI(title="Settle", version="0.1.0")
+    cors_origins = [
+        origin.strip()
+        for origin in os.environ.get("SETTLE_CORS_ORIGINS", "*").split(",")
+        if origin.strip()
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins or ["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.state.db_path = db_path
     app.state.gateway = gateway
     app.state.provider = provider or AgentProvider(FallbackChain([FakeProvider()]))

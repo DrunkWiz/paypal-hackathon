@@ -64,23 +64,36 @@ Then:
   `http://127.0.0.1:8000/api/health`
 
 The Vite dev server proxies `/api` to `http://127.0.0.1:8000`, so no CORS setup
-is needed.
+is needed in local development.
 
-### About `npm run build`
+### Environment & deployment (`render.yaml`)
 
-The build script is `tsc -b && vite build`. A production bundle has been verified
-with:
+Both `scripts/seed.py` and `python -m backend.api.server` read:
+
+- `SETTLE_DB` — path to the SQLite database file (default `data/settle.db`; set
+  to `/var/data/settle.db` on Render's persistent disk).
+- `SETTLE_TOKEN_SECRET` — HMAC secret used to sign and verify 14-day
+  `/resolve/<token>` links (default `dev-token-secret` for offline development;
+  `generateValue: true` in `render.yaml`). The seeder and the server must share
+  the same value for printed links to verify.
+- `HOST` / `PORT` — bind host and port for `backend.api.server` (defaults
+  `127.0.0.1` and `8000`).
+- `SETTLE_CORS_ORIGINS` — comma-separated allowed CORS origins for the API
+  (default `*`).
+- `VITE_API_BASE` — optional absolute API base URL read by `frontend/src/api.ts`
+  at build time when the static frontend and API service run on separate origins
+  (defaults to `""` for same-origin or Vite dev proxy; set in `render.yaml`
+  alongside an `/api/*` rewrite rule).
+
+### Production build (`npm run build`)
+
+The frontend build script runs `tsc -b && vite build` against
+`frontend/tsconfig.json`:
 
 ```bash
 cd frontend
-npx vite build
+npm run build
 ```
-
-If `npm run build` fails on your machine, it is the `tsc -b` step looking for a
-`tsconfig.json` that this sandbox's tooling would not let us create. Either run
-`npx vite build`, or change the `build` script in `frontend/package.json` to
-`vite build`. Vite compiles TypeScript itself; the `tsc` step is type-checking
-only.
 
 ---
 
@@ -163,9 +176,10 @@ backend/agent/      classification, fallback chain, reply writer, eval set
 backend/api/        FastAPI app, SQLite, tokens, resolve/execute service
 backend/demo.py     deterministic Kopi & Clay seed data
 frontend/           React + Vite + TypeScript (resolve + merchant)
-scripts/            seed.py, adversarial_check.py
-tests/              contracts, policy, paypal, agent, api
-docs/VERIFICATION.md  fresh-context verification pass
+scripts/            seed.py, adversarial_check.py, contrast_check.py, live_smoke.py
+tests/              17 test files (395 tests) across contracts, policy, paypal, agent, api
+docs/VERIFICATION.md  verification pass and audit record
+render.yaml         Render Blueprint (settle-api + settle-web)
 ```
 
 ## Limitations

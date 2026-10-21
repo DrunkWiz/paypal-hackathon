@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: settle-api
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m backend.api.server
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.6
+      - key: SETTLE_DB
+        value: /var/data/settle.db
+      - key: SETTLE_TOKEN_SECRET
+        generateValue: true
+      - key: SETTLE_PAYPAL_CLIENT_ID
+        sync: false
+      - key: SETTLE_PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: SETTLE_ANTHROPIC_API_KEY
+        sync: false
+    disk:
+      name: settle-data
+      mountPath: /var/data
+      sizeGB: 1
+  - type: web
+    name: settle-web
+    runtime: static
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_BASE
+        value: https://settle-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://settle-api.onrender.com/api/*
+      - type: rewrite
+        source: /*
+        destination: /index.html

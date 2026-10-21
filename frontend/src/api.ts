@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import type {
   AcceptResponse,
   Caps,
@@ -12,7 +14,8 @@ import type {
 } from "./types";
 
 // Same-origin by default; `vite.config.ts` proxies /api to the Python service.
-const BASE = "";
+// Override with VITE_API_BASE when the static site and API live on separate origins.
+const BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/+$/, "");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
