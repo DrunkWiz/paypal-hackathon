@@ -68,6 +68,11 @@ is needed in local development.
 
 ### Environment & deployment (`render.yaml`)
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/DrunkWiz/paypal-hackathon)
+
+One-click deploy via Render Blueprints:
+`https://render.com/deploy?repo=https://github.com/DrunkWiz/paypal-hackathon`
+
 Both `scripts/seed.py` and `python -m backend.api.server` read:
 
 - `SETTLE_DB` — path to the SQLite database file (default `data/settle.db`; set

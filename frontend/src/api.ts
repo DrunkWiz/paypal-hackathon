@@ -18,7 +18,11 @@ import type {
 
 // Same-origin by default; `vite.config.ts` proxies /api to the Python service.
 // Override with VITE_API_BASE when the static site and API live on separate origins.
-const BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/+$/, "");
+const RAW_BASE = (import.meta.env.VITE_API_BASE ?? "").trim().replace(/\/+$/, "");
+const BASE =
+  RAW_BASE && !/^https?:\/\//i.test(RAW_BASE) && !RAW_BASE.startsWith("/")
+    ? `https://${RAW_BASE}`
+    : RAW_BASE;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {

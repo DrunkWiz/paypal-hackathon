@@ -70,9 +70,14 @@ def main() -> None:
     import uvicorn
 
     app = build_demo_app()
+    default_host = (
+        "0.0.0.0"
+        if os.environ.get("RENDER") or os.environ.get("PORT")
+        else "127.0.0.1"
+    )
     uvicorn.run(
         app,
-        host=os.environ.get("HOST", "127.0.0.1"),
+        host=os.environ.get("HOST", default_host),
         port=int(os.environ.get("PORT", "8000")),
     )
 

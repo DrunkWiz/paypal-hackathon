@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from contracts import (
@@ -627,5 +629,29 @@ def create_app(
     @app.exception_handler(PolicyError)
     async def policy_error_handler(request: Request, exc: PolicyError):
         return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    dist_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    index_html = dist_dir / "index.html"
+    if index_html.is_file():
+        assets_dir = dist_dir / "assets"
+        if assets_dir.is_dir():
+            app.mount(
+                "/assets",
+                StaticFiles(directory=str(assets_dir)),
+                name="frontend-assets",
+            )
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        def serve_spa(full_path: str):
+            if full_path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="not found")
+            candidate = (dist_dir / full_path).resolve()
+            if (
+                full_path
+                and candidate.is_file()
+                and dist_dir.resolve() in candidate.parents
+            ):
+                return FileResponse(str(candidate))
+            return FileResponse(str(index_html))
 
     return app
