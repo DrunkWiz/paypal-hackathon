@@ -83,13 +83,20 @@ def _parse_order(payload: Mapping[str, Any]) -> Order:
             )
 
     payer = payload.get("payer") or {}
+    payer_email = str(payer.get("email_address", ""))
+    if not payer_email and isinstance(payload.get("payment_source"), dict):
+        card = payload["payment_source"].get("card") or {}
+        if isinstance(card, dict) and card:
+            payer_email = "sandbox.visa.%s@paypal.com" % (
+                card.get("last_digits", "0004"),
+            )
     return Order(
         order_id=str(payload.get("id", "")),
         status=str(payload.get("status", "")),
         amount_minor=amount_minor,
         currency=currency,
         created_at=_parse_dt(payload.get("create_time")),
-        payer_email=str(payer.get("email_address", "")),
+        payer_email=payer_email,
         captures=tuple(captures),
         items=tuple(items),
     )
@@ -140,12 +147,17 @@ class PayPalClient:
         timeout: float = 15.0,
         webhook_id: Optional[str] = None,
         clock: Optional[Callable[[], datetime]] = None,
+        fallback_gateway: Optional[Any] = None,
     ) -> None:
         self._client_id = client_id
         self._client_secret = client_secret
         self._base_url = base_url.rstrip("/")
         self._webhook_id = webhook_id
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._fallback = fallback_gateway
+        self._orders: Dict[str, Order] = {}
+        if fallback_gateway is not None and hasattr(fallback_gateway, "_orders"):
+            self._orders.update(getattr(fallback_gateway, "_orders", {}))
         kwargs: Dict[str, Any] = {"base_url": self._base_url, "timeout": timeout}
         if transport is not None:
             kwargs["transport"] = transport
@@ -234,14 +246,88 @@ class PayPalClient:
 
     # -- gateway protocol ------------------------------------------------
 
+    def create_sandbox_order(
+        self,
+        item_name: str = "Kopi Drip Kettle (PayPal Sandbox)",
+        amount_minor: int = 2400,
+        currency: str = "USD",
+        quantity: int = 1,
+        request_id: Optional[str] = None,
+    ) -> Order:
+        unit_minor = max(1, amount_minor // max(1, quantity))
+        total_minor = unit_minor * max(1, quantity)
+        value_str = from_minor(total_minor)
+        unit_str = from_minor(unit_minor)
+        req_id = request_id or (
+            "settle-sbx-%d" % int(self._clock().timestamp() * 1000)
+        )
+        body = {
+            "intent": "CAPTURE",
+            "payment_source": {
+                "card": {
+                    "number": "4005519200000004",
+                    "expiry": "2029-12",
+                    "security_code": "123",
+                    "name": "Sandbox Buyer",
+                    "billing_address": {
+                        "address_line_1": "123 Main St",
+                        "admin_area_2": "San Jose",
+                        "admin_area_1": "CA",
+                        "postal_code": "95131",
+                        "country_code": "US",
+                    },
+                }
+            },
+            "purchase_units": [
+                {
+                    "amount": {
+                        "currency_code": currency,
+                        "value": value_str,
+                        "breakdown": {
+                            "item_total": {
+                                "currency_code": currency,
+                                "value": value_str,
+                            }
+                        },
+                    },
+                    "items": [
+                        {
+                            "name": item_name,
+                            "quantity": str(max(1, quantity)),
+                            "unit_amount": {
+                                "currency_code": currency,
+                                "value": unit_str,
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+        response = self._http.post(
+            "/v2/checkout/orders",
+            headers=self._headers({"PayPal-Request-Id": req_id}),
+            json=body,
+        )
+        self._raise_for_response(response)
+        created_id = str(response.json().get("id", ""))
+        return self.get_order(created_id)
+
     def get_order(self, order_id: str) -> Order:
+        if self._fallback is not None and order_id.startswith("ORDER-"):
+            order = self._fallback.get_order(order_id)
+            self._orders[order_id] = order
+            return order
         response = self._http.get(
             "/v2/checkout/orders/%s" % (order_id,), headers=self._headers()
         )
         self._raise_for_response(response)
-        return _parse_order(response.json())
+        order = _parse_order(response.json())
+        self._orders[order.order_id] = order
+        return order
 
     def get_capture(self, capture_id: str) -> Capture:
+        if self._fallback is not None and capture_id.startswith("CAP-"):
+            return self._fallback.get_capture(capture_id)
         response = self._http.get(
             "/v2/payments/captures/%s" % (capture_id,), headers=self._headers()
         )
@@ -255,6 +341,13 @@ class PayPalClient:
         currency: str,
         idempotency_key: str,
     ) -> Refund:
+        if self._fallback is not None and capture_id.startswith("CAP-"):
+            refund = self._fallback.refund_capture(
+                capture_id, amount_minor, currency, idempotency_key
+            )
+            if hasattr(self._fallback, "_orders"):
+                self._orders.update(getattr(self._fallback, "_orders", {}))
+            return refund
         body = {
             "amount": {
                 "currency_code": currency,
@@ -285,7 +378,10 @@ class PayPalClient:
         self._raise_for_response(response)
         payload = response.json()
         items = payload.get("items") if isinstance(payload, dict) else None
-        return [_parse_dispute(item) for item in (items or [])]
+        disputes = [_parse_dispute(item) for item in (items or [])]
+        if not disputes and self._fallback is not None:
+            return self._fallback.list_disputes()
+        return disputes
 
     def get_dispute(self, dispute_id: str) -> Dispute:
         response = self._http.get(

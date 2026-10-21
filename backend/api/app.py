@@ -71,6 +71,13 @@ class AcceptIn(BaseModel):
     case_id: str
 
 
+class SandboxOrderIn(BaseModel):
+    item_name: str = "Kopi Drip Kettle (PayPal Sandbox)"
+    amount_minor: int = 2400
+    currency: str = "USD"
+    quantity: int = 1
+
+
 def _caps_dict(caps: Caps) -> Dict[str, Any]:
     return {
         "per_refund_max_minor": caps.per_refund_max_minor,
@@ -552,6 +559,72 @@ def create_app(
         finally:
             connection.close()
 
+    @app.post("/api/merchants/{merchant_id}/paypal/sandbox-order")
+    def create_sandbox_order(
+        merchant_id: str, body: SandboxOrderIn
+    ) -> Dict[str, Any]:
+        connection = conn()
+        try:
+            require_merchant(connection, merchant_id)
+            creator = getattr(app.state.gateway, "create_sandbox_order", None)
+            if creator is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="real PayPal gateway is not configured",
+                )
+            order = gateway_call(
+                lambda: creator(
+                    item_name=body.item_name,
+                    amount_minor=body.amount_minor,
+                    currency=body.currency,
+                    quantity=body.quantity,
+                )
+            )
+            capture = order.captures[0] if order.captures else None
+            token = (
+                sign_token(
+                    {
+                        "merchant_id": merchant_id,
+                        "order_id": order.order_id,
+                        "capture_id": capture.capture_id,
+                    },
+                    app.state.token_secret,
+                )
+                if capture is not None
+                else None
+            )
+            return {
+                "order": {
+                    "order_id": order.order_id,
+                    "status": order.status,
+                    "amount_minor": order.amount_minor,
+                    "currency": order.currency,
+                    "payer_email": order.payer_email,
+                    "created_at": service.iso(order.created_at),
+                    "items": [
+                        {
+                            "name": item.name,
+                            "quantity": item.quantity,
+                            "unit_amount_minor": item.unit_amount_minor,
+                        }
+                        for item in order.items
+                    ],
+                    "capture": (
+                        {
+                            "capture_id": capture.capture_id,
+                            "amount_minor": capture.amount_minor,
+                            "refunded_amount_minor": capture.refunded_amount_minor,
+                        }
+                        if capture is not None
+                        else None
+                    ),
+                },
+                "token": token,
+                "url": ("/resolve/%s" % (token,)) if token else None,
+            }
+        finally:
+            connection.close()
+
     @app.get("/api/merchants/{merchant_id}/orders")
     def merchant_orders(merchant_id: str) -> Dict[str, Any]:
         connection = conn()
@@ -559,7 +632,11 @@ def create_app(
             require_merchant(connection, merchant_id)
             orders_map = getattr(app.state.gateway, "_orders", {})
             results: List[Dict[str, Any]] = []
-            for order_id in sorted(orders_map.keys()):
+            sorted_ids = sorted(
+                orders_map.keys(),
+                key=lambda oid: (1 if str(oid).startswith("ORDER-") else 0, str(oid)),
+            )
+            for order_id in sorted_ids:
                 order = gateway_call(
                     lambda oid=order_id: app.state.gateway.get_order(oid)
                 )

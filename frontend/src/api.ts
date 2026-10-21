@@ -125,6 +125,24 @@ export const api = {
       `/api/merchants/${encodeURIComponent(merchantId)}/orders`,
     ),
 
+  createSandboxOrder: (
+    merchantId: string,
+    body: {
+      item_name?: string;
+      amount_minor?: number;
+      currency?: string;
+      quantity?: number;
+    } = {},
+  ) =>
+    request<{
+      order: MerchantOrder;
+      token: string | null;
+      url: string | null;
+    }>(
+      `/api/merchants/${encodeURIComponent(merchantId)}/paypal/sandbox-order`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
   createResolveLink: (merchantId: string, orderId: string) =>
     request<ResolveLinkResponse>(
       `/api/orders/${encodeURIComponent(orderId)}/resolve-link?merchant_id=${encodeURIComponent(merchantId)}`,
