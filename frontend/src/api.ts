@@ -77,6 +77,12 @@ export const api = {
   caps: (merchantId: string) =>
     request<Caps>(`/api/merchants/${encodeURIComponent(merchantId)}/caps`),
 
+  updateCaps: (merchantId: string, body: Caps) =>
+    request<Caps>(`/api/merchants/${encodeURIComponent(merchantId)}/caps`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
   policy: (merchantId: string) =>
     request<{ status: Record<string, unknown>; rules: CompiledRule[] }>(
       `/api/merchants/${encodeURIComponent(merchantId)}/policy`,

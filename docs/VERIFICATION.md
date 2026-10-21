@@ -66,8 +66,8 @@ Run serially, one file at a time, from the repository root.
 | `tests/api/test_flow.py` | 6 passed |
 | `tests/api/test_routes.py` | 11 passed |
 | `tests/api/test_approvals.py` | 5 passed |
-| `tests/api/test_demo.py` | 3 passed |
-| **total** | **395 passed, 0 failed** |
+| `tests/api/test_demo.py` | 4 passed |
+| **total** | **396 passed, 0 failed** |
 
 ## 4. The invariant suite actually fails when the guarantee is removed
 
@@ -248,7 +248,17 @@ and `Emulation.setEmulatedMedia` for `prefers-color-scheme: light` and `dark`):
      accessible labels (`aria-label="Details for ORDER-002"`); `Enter` opens the
      case detail card (`#detail-heading`).
   5. `Tab` into the Approvals queue focuses case-specific action buttons
-     (`aria-label="Approve case ..."` / `"Reject case ..."`).
+     (`aria-label="Approve case ..."` / `"Reject case ..."`), and activating
+     them updates the queue in place.
+  6. `Policy` tab includes an accessible `form[aria-label="Edit hard caps"]`
+     (`#cap-per-refund`, `#cap-daily`, `#cap-max-age`, and `"Save caps"` submit
+     button); updating the per-refund cap to `2500` (`USD 25.00`) via keyboard
+     immediately persists via `PUT /api/merchants/{id}/caps` and updates the
+     live Totals summary.
+- **Additional UI states & mobile viewport**:
+  - Customer decline (`"Talk to the shop instead"`) transitions to `#declined-heading` (`"We’ve told the shop"`).
+  - Invalid/tampered token (`/resolve/bad.token`) renders `role="alert"` (`"bad token signature"`).
+  - Mobile `390×844` viewport (`@media (max-width: 540px)`) renders with zero horizontal overflow (`clientWidth: 390, scrollWidth: 390`).
 
 ## 11. Still unverified at the end of this pass
 

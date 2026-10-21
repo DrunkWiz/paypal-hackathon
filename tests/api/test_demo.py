@@ -68,3 +68,18 @@ def test_seeded_order_can_be_resolved_end_to_end(tmp_path):
     ).json()
     assert accepted["status"] == "refunded"
     assert accepted["amount_minor"] == body["decision"]["amount_minor"]
+
+
+def test_demo_app_honors_optional_live_credentials_when_present(tmp_path, monkeypatch):
+    monkeypatch.setenv("SETTLE_ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setenv("SETTLE_PAYPAL_CLIENT_ID", "pp-client-id")
+    monkeypatch.setenv("SETTLE_PAYPAL_CLIENT_SECRET", "pp-client-secret")
+
+    app = build_demo_app(str(tmp_path / "live_cfg.db"))
+    client = TestClient(app)
+
+    health = client.get("/api/health").json()
+    assert health["status"] == "ok"
+    assert health["paypal_mode"] == "live"
+    assert health["model_rungs_configured"] == 2
+

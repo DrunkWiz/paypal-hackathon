@@ -5,8 +5,16 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import List
 
+from backend.agent import (
+    AgentProvider,
+    AnthropicProvider,
+    FakeProvider,
+    FallbackChain,
+)
 from backend.demo import build_demo_gateway, ensure_demo_merchant
+from backend.paypal.client import PayPalClient
 
 from . import db as db_module
 from .app import create_app
@@ -21,10 +29,31 @@ def build_demo_app(db_path=None):
     db_module.init_db(path)
 
     now = datetime.now(timezone.utc)
-    gateway = build_demo_gateway(now)
+    paypal_id = os.environ.get("SETTLE_PAYPAL_CLIENT_ID", "").strip()
+    paypal_secret = os.environ.get("SETTLE_PAYPAL_CLIENT_SECRET", "").strip()
+    if paypal_id and paypal_secret:
+        gateway = PayPalClient(
+            paypal_id,
+            paypal_secret,
+            base_url=os.environ.get(
+                "SETTLE_PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com"
+            ),
+            webhook_id=os.environ.get("SETTLE_PAYPAL_WEBHOOK_ID") or None,
+        )
+    else:
+        gateway = build_demo_gateway(now)
+
+    anthropic_key = os.environ.get("SETTLE_ANTHROPIC_API_KEY", "").strip()
+    rungs: List[object] = (
+        [AnthropicProvider(anthropic_key)] if anthropic_key else []
+    )
+    rungs.append(FakeProvider())
+    provider = AgentProvider(FallbackChain(rungs))
+
     app = create_app(
         path,
         gateway,
+        provider=provider,
         token_secret=os.environ.get("SETTLE_TOKEN_SECRET", "dev-token-secret"),
     )
 

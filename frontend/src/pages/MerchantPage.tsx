@@ -32,6 +32,10 @@ export default function MerchantPage() {
   const [tab, setTab] = useState<Tab>("cases");
 
   const [caps, setCaps] = useState<Caps | null>(null);
+  const [draftPerRefundMinor, setDraftPerRefundMinor] = useState<string>("");
+  const [draftDailyMinor, setDraftDailyMinor] = useState<string>("");
+  const [draftMaxAgeDays, setDraftMaxAgeDays] = useState<string>("");
+  const [savingCaps, setSavingCaps] = useState(false);
   const [totals, setTotals] = useState<Totals | null>(null);
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [approvals, setApprovals] = useState<Array<Record<string, unknown>>>([]);
@@ -50,15 +54,27 @@ export default function MerchantPage() {
     setLoading(true);
     setError(null);
     try {
-      const [totalsData, casesData, approvalsData, disputesData, policyData, healthData] =
-        await Promise.all([
-          api.totals(id),
-          api.cases(id),
-          api.approvals(id),
-          api.disputes(id),
-          api.policy(id),
-          api.health(),
-        ]);
+      const [
+        capsData,
+        totalsData,
+        casesData,
+        approvalsData,
+        disputesData,
+        policyData,
+        healthData,
+      ] = await Promise.all([
+        api.caps(id),
+        api.totals(id),
+        api.cases(id),
+        api.approvals(id),
+        api.disputes(id),
+        api.policy(id),
+        api.health(),
+      ]);
+      setCaps(capsData);
+      setDraftPerRefundMinor(String(capsData.per_refund_max_minor));
+      setDraftDailyMinor(String(capsData.daily_total_max_minor));
+      setDraftMaxAgeDays(String(capsData.max_order_age_days));
       setTotals(totalsData);
       setCases(casesData.cases);
       setApprovals(approvalsData.approvals);
@@ -344,6 +360,90 @@ export default function MerchantPage() {
           id="panel-policy"
           aria-labelledby="tab-policy"
         >
+          <h2>Hard caps</h2>
+          {caps ? (
+            <form
+              className="row wrap"
+              aria-label="Edit hard caps"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!merchantId) return;
+                const perRefund = Number.parseInt(draftPerRefundMinor, 10);
+                const daily = Number.parseInt(draftDailyMinor, 10);
+                const maxAge = Number.parseInt(draftMaxAgeDays, 10);
+                if (
+                  !Number.isInteger(perRefund) ||
+                  perRefund < 0 ||
+                  !Number.isInteger(daily) ||
+                  daily < 0 ||
+                  !Number.isInteger(maxAge) ||
+                  maxAge < 1
+                ) {
+                  setError("Caps must be valid integers.");
+                  return;
+                }
+                void (async () => {
+                  setSavingCaps(true);
+                  setError(null);
+                  try {
+                    await api.updateCaps(merchantId, {
+                      per_refund_max_minor: perRefund,
+                      daily_total_max_minor: daily,
+                      max_order_age_days: maxAge,
+                      currency: caps.currency,
+                    });
+                    await load(merchantId);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : String(err));
+                  } finally {
+                    setSavingCaps(false);
+                  }
+                })();
+              }}
+            >
+              <div>
+                <label htmlFor="cap-per-refund">
+                  Per-refund cap (minor units, {formatMoney(Number.parseInt(draftPerRefundMinor, 10) || 0, currency)})
+                </label>
+                <input
+                  id="cap-per-refund"
+                  inputMode="numeric"
+                  value={draftPerRefundMinor}
+                  onChange={(event) => setDraftPerRefundMinor(event.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="cap-daily">
+                  Daily cap (minor units, {formatMoney(Number.parseInt(draftDailyMinor, 10) || 0, currency)})
+                </label>
+                <input
+                  id="cap-daily"
+                  inputMode="numeric"
+                  value={draftDailyMinor}
+                  onChange={(event) => setDraftDailyMinor(event.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="cap-max-age">Max order age (days)</label>
+                <input
+                  id="cap-max-age"
+                  inputMode="numeric"
+                  value={draftMaxAgeDays}
+                  onChange={(event) => setDraftMaxAgeDays(event.target.value)}
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn primary"
+                disabled={savingCaps}
+              >
+                {savingCaps ? "Saving…" : "Save caps"}
+              </button>
+            </form>
+          ) : (
+            <p className="muted">Load a merchant to edit caps.</p>
+          )}
+
           <h2>Policy</h2>
           <p className="muted small">
             Approved: {policyStatus ? String(policyStatus.approved ?? false) : "—"}
