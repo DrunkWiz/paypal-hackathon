@@ -2120,8 +2120,7 @@ ul.plain {
   max-width: 1320px;
   width: calc(100% - 40px);
   margin: 18px auto 48px;
-  background: color-mix(in srgb, var(--bg-surface) 76%, transparent);
-  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--bg-surface) 58%, transparent);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-sm);
 }
@@ -2263,63 +2262,55 @@ ul.plain {
   color: var(--fg-primary);
 }
 
-/* 4. Right Hero Open 3D Backdrop Viewport + Floating Telemetry Dock */
+/* 4. Right Hero Live Settlement Trace Dock over 3D Backdrop */
 .tk-hero-right {
-  padding: 24px 28px;
+  padding: 32px;
   background: transparent;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  min-height: 490px;
-}
-
-.tk-backdrop-HintRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.tk-backdrop-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--fg-secondary);
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--bg-surface) 84%, transparent);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-subtle);
-}
-
-.tk-hero-open-space {
-  flex: 1;
-  min-height: 260px;
-  pointer-events: none;
+  justify-content: center;
 }
 
 .tk-floating-dock {
-  background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg-surface) 78%, transparent);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
 }
 
 .tk-floating-dock > .tk-hud-row {
-  padding: 12px 14px 8px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border-hairline);
 }
 
-.tk-floating-dock > .tk-hud-grid {
-  margin: 0 14px 12px;
+.tk-trace-stack {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  justify-content: space-between;
+}
+
+.tk-trace-step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tk-trace-quote {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--fg-primary);
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--bg-subtle) 82%, transparent);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-xs);
 }
 
 .tk-live-dot {

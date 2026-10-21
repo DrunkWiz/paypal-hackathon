@@ -167,14 +167,14 @@ export default function PayPalHero3D({ mode = "settled" }: PayPalBackdrop3DProps
     // Back "P" — PayPal Deep Navy (#003087)
     const backPMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x003087,
-      metalness: 0.32,
-      roughness: 0.18,
+      metalness: 0.3,
+      roughness: 0.2,
       clearcoat: 1.0,
-      clearcoatRoughness: 0.08,
+      clearcoatRoughness: 0.1,
       emissive: 0x001c64,
-      emissiveIntensity: 0.38,
+      emissiveIntensity: 0.35,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.42,
     });
     const backPMesh = new THREE.Mesh(pGeometry, backPMaterial);
     backPMesh.position.set(-0.26, 0.24, -0.2);
@@ -183,13 +183,13 @@ export default function PayPalHero3D({ mode = "settled" }: PayPalBackdrop3DProps
     // Mid Intersection "P" slice — Rich PayPal Overlap Navy (#012169)
     const midPMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x012169,
-      metalness: 0.38,
-      roughness: 0.14,
+      metalness: 0.35,
+      roughness: 0.16,
       clearcoat: 1.0,
       emissive: 0x003087,
-      emissiveIntensity: 0.32,
+      emissiveIntensity: 0.3,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.48,
     });
     const midPMesh = new THREE.Mesh(pGeometry, midPMaterial);
     midPMesh.scale.set(0.92, 0.92, 0.65);
@@ -200,13 +200,13 @@ export default function PayPalHero3D({ mode = "settled" }: PayPalBackdrop3DProps
     const frontPMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x009cde,
       metalness: 0.18,
-      roughness: 0.14,
+      roughness: 0.16,
       clearcoat: 1.0,
-      clearcoatRoughness: 0.06,
+      clearcoatRoughness: 0.08,
       emissive: 0x0070ba,
-      emissiveIntensity: 0.34,
+      emissiveIntensity: 0.32,
       transparent: true,
-      opacity: 0.88,
+      opacity: 0.46,
     });
     const frontPMesh = new THREE.Mesh(pGeometry, frontPMaterial);
     frontPMesh.position.set(0.26, -0.24, 0.22);
