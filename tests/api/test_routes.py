@@ -174,6 +174,18 @@ def test_cases_list_starts_empty(client, merchant):
     assert client.get("/api/merchants/%s/cases" % merchant).json()["cases"] == []
 
 
+def test_orders_read(client, merchant):
+    response = client.get("/api/merchants/%s/orders" % merchant)
+    assert response.status_code == 200
+    orders = response.json()["orders"]
+    assert len(orders) == 1
+    assert orders[0]["order_id"] == "ORDER-1"
+    assert orders[0]["amount_minor"] == 5000
+    assert orders[0]["capture"]["capture_id"] == "CAP-1"
+    assert orders[0]["items"][0]["name"] == "Kopi mug"
+
+
+
 def test_webhook_accepts_valid_signature(client):
     app_fake = build_fake()
     payload = {

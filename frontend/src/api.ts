@@ -9,6 +9,9 @@ import type {
   CompiledRule,
   Dispute,
   Health,
+  MerchantOrder,
+  PolicyCompileResponse,
+  ResolveLinkResponse,
   SessionResponse,
   Totals,
 } from "./types";
@@ -74,6 +77,19 @@ export const api = {
       `/api/merchants/${encodeURIComponent(merchantId)}`,
     ),
 
+  onboardMerchant: (body: {
+    name: string;
+    email: string;
+    currency: string;
+    per_refund_max_minor: number;
+    daily_total_max_minor: number;
+    max_order_age_days: number;
+  }) =>
+    request<{ merchant_id: string; name: string; email: string; caps: Caps }>(
+      "/api/merchants",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
   caps: (merchantId: string) =>
     request<Caps>(`/api/merchants/${encodeURIComponent(merchantId)}/caps`),
 
@@ -86,6 +102,29 @@ export const api = {
   policy: (merchantId: string) =>
     request<{ status: Record<string, unknown>; rules: CompiledRule[] }>(
       `/api/merchants/${encodeURIComponent(merchantId)}/policy`,
+    ),
+
+  compilePolicy: (merchantId: string, text: string) =>
+    request<PolicyCompileResponse>(
+      `/api/merchants/${encodeURIComponent(merchantId)}/policy/compile`,
+      { method: "POST", body: JSON.stringify({ text }) },
+    ),
+
+  approvePolicy: (merchantId: string) =>
+    request<{ policy_id: number; approved: boolean }>(
+      `/api/merchants/${encodeURIComponent(merchantId)}/policy/approve`,
+      { method: "POST" },
+    ),
+
+  orders: (merchantId: string) =>
+    request<{ orders: MerchantOrder[] }>(
+      `/api/merchants/${encodeURIComponent(merchantId)}/orders`,
+    ),
+
+  createResolveLink: (merchantId: string, orderId: string) =>
+    request<ResolveLinkResponse>(
+      `/api/orders/${encodeURIComponent(orderId)}/resolve-link?merchant_id=${encodeURIComponent(merchantId)}`,
+      { method: "POST" },
     ),
 
   cases: (merchantId: string) =>

@@ -550,6 +550,49 @@ def create_app(
         finally:
             connection.close()
 
+    @app.get("/api/merchants/{merchant_id}/orders")
+    def merchant_orders(merchant_id: str) -> Dict[str, Any]:
+        connection = conn()
+        try:
+            require_merchant(connection, merchant_id)
+            orders_map = getattr(app.state.gateway, "_orders", {})
+            results: List[Dict[str, Any]] = []
+            for order_id in sorted(orders_map.keys()):
+                order = gateway_call(
+                    lambda oid=order_id: app.state.gateway.get_order(oid)
+                )
+                capture = order.captures[0] if order.captures else None
+                results.append(
+                    {
+                        "order_id": order.order_id,
+                        "status": order.status,
+                        "amount_minor": order.amount_minor,
+                        "currency": order.currency,
+                        "payer_email": order.payer_email,
+                        "created_at": service.iso(order.created_at),
+                        "items": [
+                            {
+                                "name": item.name,
+                                "quantity": item.quantity,
+                                "unit_amount_minor": item.unit_amount_minor,
+                            }
+                            for item in order.items
+                        ],
+                        "capture": (
+                            {
+                                "capture_id": capture.capture_id,
+                                "amount_minor": capture.amount_minor,
+                                "refunded_amount_minor": capture.refunded_amount_minor,
+                            }
+                            if capture is not None
+                            else None
+                        ),
+                    }
+                )
+            return {"orders": results}
+        finally:
+            connection.close()
+
     @app.get("/api/merchants/{merchant_id}/disputes")
     def disputes(merchant_id: str) -> Dict[str, Any]:
         connection = conn()

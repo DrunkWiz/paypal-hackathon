@@ -72,6 +72,11 @@ export interface CaseDetail {
   order_id: string;
   capture_id: string;
   category: string;
+  sentiment?: string;
+  wants?: string;
+  confidence?: number;
+  has_photo?: number | boolean;
+  facts_json?: string;
   status: string;
   raw_text: string;
   created_at: string;
@@ -116,9 +121,44 @@ export interface Health {
   status: string;
   paypal_mode: string;
   model_provider: string;
+  model_model?: string;
   model_rung: number;
   model_rungs_configured: number;
   classifications: number;
+}
+
+export interface MerchantOrder {
+  order_id: string;
+  status: string;
+  amount_minor: number;
+  currency: string;
+  payer_email: string;
+  created_at: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    unit_amount_minor: number;
+  }>;
+  capture: {
+    capture_id: string;
+    amount_minor: number;
+    refunded_amount_minor: number;
+  } | null;
+}
+
+export interface ResolveLinkResponse {
+  token: string;
+  url: string;
+  expires_in_seconds: number;
+}
+
+export interface PolicyCompileResponse {
+  policy_id: number;
+  approved: boolean;
+  provider: string;
+  model: string;
+  rung: number;
+  rules: CompiledRule[];
 }
 
 /** Integer-only money formatting. No float arithmetic. */
