@@ -37,9 +37,15 @@ export default function App() {
   ) => {
     setLaunchingOrder(orderId);
     try {
-      const merchantId =
+      const storedId =
         localStorage.getItem("settle.merchantId") || "m_kopiclay";
-      const link = await api.createResolveLink(merchantId, orderId);
+      let link;
+      try {
+        link = await api.createResolveLink(storedId, orderId);
+      } catch {
+        localStorage.setItem("settle.merchantId", "m_kopiclay");
+        link = await api.createResolveLink("m_kopiclay", orderId);
+      }
       const query = overCapDemo
         ? `?overcap=1&t=${Date.now()}`
         : `?t=${Date.now()}`;

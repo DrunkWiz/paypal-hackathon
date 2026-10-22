@@ -8,6 +8,16 @@ import {
   VISION_EVIDENCE_PRESETS,
   getVisionEvidenceForCase,
 } from "../visionEvidence";
+import {
+  getMarginRetentionStats,
+  getNegotiationForCase,
+} from "../smartNegotiator";
+import { McpInspectorPanel } from "../components/McpInspectorPanel";
+import { WhatIfSimulatorPanel } from "../components/WhatIfSimulatorPanel";
+import {
+  PayerTrustInspectorCard,
+  PayerTrustPill,
+} from "../components/PayerTrustBadge";
 import type {
   Caps,
   CaseDetail,
@@ -27,6 +37,7 @@ type Tab =
   | "orders"
   | "disputes"
   | "policy"
+  | "mcp"
   | "totals";
 
 type CaseStatusFilter =
@@ -34,7 +45,8 @@ type CaseStatusFilter =
   | "refunded"
   | "needs_approval"
   | "offered"
-  | "declined";
+  | "declined"
+  | "unconfirmed";
 
 type CaseSortField = "created_at" | "status" | "category";
 type SortDirection = "asc" | "desc";
@@ -48,6 +60,7 @@ const VALID_TABS: readonly Tab[] = [
   "orders",
   "disputes",
   "policy",
+  "mcp",
   "totals",
 ];
 
@@ -74,6 +87,8 @@ function formatStatusLabel(status: string): string {
       return "Rejected";
     case "pending":
       return "Pending Review";
+    case "unconfirmed":
+      return "Unconfirmed (Retry)";
     case "open":
       return "Open";
     default:
@@ -393,11 +408,23 @@ export default function MerchantPage({
         ),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      if (id !== "m_kopiclay" && msg.toLowerCase().includes("not found")) {
+        localStorage.setItem("settle.merchantId", "m_kopiclay");
+        setMerchantId("m_kopiclay");
+        return;
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const [mintingSandboxOrder, setMintingSandboxOrder] = useState(false);
+  const [drawerCvBoxes, setDrawerCvBoxes] = useState(true);
+  const [drawerVisionPresetId, setDrawerVisionPresetId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     localStorage.setItem("settle.merchantId", merchantId);
@@ -425,6 +452,7 @@ export default function MerchantPage({
       needs_approval: 0,
       offered: 0,
       declined: 0,
+      unconfirmed: 0,
     };
     for (const c of cases) {
       if (c.status === "refunded") counts.refunded += 1;
@@ -432,6 +460,7 @@ export default function MerchantPage({
       else if (c.status === "offered" || c.status === "open")
         counts.offered += 1;
       else if (c.status === "declined") counts.declined += 1;
+      else if (c.status === "unconfirmed") counts.unconfirmed += 1;
     }
     return counts;
   }, [cases]);
@@ -642,8 +671,18 @@ export default function MerchantPage({
     setError(null);
     try {
       if (which === "approve") {
-        await api.approveApproval(merchantId, approvalId);
-        notify(`Approved #${approvalId} — PayPal refund executed.`);
+        const res = await api.approveApproval(merchantId, approvalId);
+        if (res.status === "blocked") {
+          setError(
+            `Approval #${approvalId} blocked (${String(res.reason ?? "cap_exhausted")}): remaining daily budget is $0.00.`,
+          );
+        } else if (res.status === "unconfirmed") {
+          notify(
+            `Approval #${approvalId} gateway timeout — recorded for idempotency reconciliation.`,
+          );
+        } else {
+          notify(`Approved #${approvalId} — PayPal refund executed.`);
+        }
       } else {
         await api.rejectApproval(merchantId, approvalId);
         notify(`Rejected #${approvalId}.`);
@@ -666,21 +705,38 @@ export default function MerchantPage({
     setBulkBusy(true);
     setError(null);
     try {
-      const count = selectedApprovalIds.length;
+      let settledCount = 0;
+      let blockedCount = 0;
       for (const approvalId of selectedApprovalIds) {
         if (which === "approve") {
-          await api.approveApproval(merchantId, approvalId);
+          const res = await api.approveApproval(merchantId, approvalId);
+          if (res.status === "blocked") {
+            blockedCount += 1;
+          } else {
+            settledCount += 1;
+          }
         } else {
           await api.rejectApproval(merchantId, approvalId);
+          settledCount += 1;
         }
       }
       setSelectedApprovalIds([]);
       await refreshAll(merchantId);
-      notify(
-        which === "approve"
-          ? `Approved and settled ${count} refund${count === 1 ? "" : "s"}.`
-          : `Rejected ${count} escalation${count === 1 ? "" : "s"}.`,
-      );
+      if (which === "approve") {
+        if (blockedCount > 0) {
+          notify(
+            `Approved ${settledCount} refund${settledCount === 1 ? "" : "s"} (${blockedCount} blocked by daily budget cap).`,
+          );
+        } else {
+          notify(
+            `Approved and settled ${settledCount} refund${settledCount === 1 ? "" : "s"}.`,
+          );
+        }
+      } else {
+        notify(
+          `Rejected ${settledCount} escalation${settledCount === 1 ? "" : "s"}.`,
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -739,17 +795,25 @@ export default function MerchantPage({
     setError(null);
     try {
       const currentPerCap = caps?.per_refund_max_minor ?? 5000;
-      const overCapOrder =
-        orders.find(
-          (o) =>
-            (o.capture?.refunded_amount_minor ?? 0) === 0 &&
-            o.amount_minor > currentPerCap,
-        ) ||
-        orders.find((o) => o.order_id === "ORDER-003") ||
-        orders.find((o) => o.order_id === "ORDER-002") ||
-        orders[0];
+      const existingOverCap = orders.find(
+        (o) =>
+          (o.capture?.refunded_amount_minor ?? 0) === 0 &&
+          o.amount_minor > currentPerCap &&
+          !cases.some(
+            (c) => c.order_id === o.order_id && c.status === "needs_approval",
+          ),
+      );
+      let orderId = existingOverCap?.order_id;
+      if (!orderId) {
+        const minted = await api.createSandboxOrder(merchantId, {
+          amount_minor: Math.max(8900, currentPerCap + 2500),
+          currency: caps?.currency ?? "USD",
+          item_name: "Kopi Artisan Espresso Set (Over-Cap Escalation)",
+          quantity: 1,
+        });
+        orderId = minted.order.order_id;
+      }
 
-      const orderId = overCapOrder?.order_id || "ORDER-003";
       const link = await api.createResolveLink(merchantId, orderId);
       const classified = await api.classify(link.token, {
         text: "You sent the wrong item instead of what I ordered.",
@@ -768,12 +832,6 @@ export default function MerchantPage({
       setSimulatingOverCap(false);
     }
   };
-
-  const [mintingSandboxOrder, setMintingSandboxOrder] = useState(false);
-  const [drawerCvBoxes, setDrawerCvBoxes] = useState(true);
-  const [drawerVisionPresetId, setDrawerVisionPresetId] = useState<
-    string | null
-  >(null);
 
   const handleCreateLiveSandboxOrder = async (
     amountMinor = 2400,
@@ -1244,7 +1302,34 @@ export default function MerchantPage({
     orders: "Orders & Resolve Links",
     disputes: "PayPal Disputes",
     policy: "Policy & Guardrails",
+    mcp: "PayPal MCP Firewall",
     totals: "Ledger & Telemetry",
+  };
+
+  const marginStats = useMemo(
+    () => getMarginRetentionStats(),
+    [cases, selectedCaseId, tab],
+  );
+
+  const handleApplySimulatedCaps = async (newCaps: Caps) => {
+    setSavingCaps(true);
+    setError(null);
+    try {
+      const updated = await api.updateCaps(merchantId, newCaps);
+      setCaps(updated);
+      setPerRefundMax(String(updated.per_refund_max_minor));
+      setDailyMax(String(updated.daily_total_max_minor));
+      setMaxAgeDays(String(updated.max_order_age_days));
+      const tot = await api.totals(merchantId);
+      setTotals(tot);
+      notify(
+        `Applied simulated guardrails: ${formatMoney(updated.per_refund_max_minor, currency)}/tx · ${formatMoney(updated.daily_total_max_minor, currency)}/day.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingCaps(false);
+    }
   };
 
   const themeLabel =
@@ -1271,6 +1356,16 @@ export default function MerchantPage({
                 ["refunded", "Refunded", caseCounts.refunded],
                 ["offered", "Offered", caseCounts.offered],
                 ["declined", "Declined", caseCounts.declined],
+                ...(caseCounts.unconfirmed > 0 ||
+                caseStatusFilter === "unconfirmed"
+                  ? ([
+                      [
+                        "unconfirmed",
+                        "Unconfirmed",
+                        caseCounts.unconfirmed,
+                      ],
+                    ] as const)
+                  : []),
               ] as const
             ).map(([key, label, count]) => (
               <button
@@ -1414,6 +1509,7 @@ export default function MerchantPage({
                 const rowCurrency = String(
                   c.audit?.currency ?? c.decision?.currency ?? currency,
                 );
+                const negotiated = getNegotiationForCase(c.id, c.order_id);
                 return (
                   <tr
                     key={c.id}
@@ -1424,7 +1520,15 @@ export default function MerchantPage({
                       {c.id}
                     </td>
                     <td>
-                      <span className="code-pill">{c.order_id}</span>
+                      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                        <span className="code-pill">{c.order_id}</span>
+                        <PayerTrustPill
+                          orderId={c.order_id}
+                          allOrders={orders}
+                          allCases={cases}
+                          compact
+                        />
+                      </div>
                     </td>
                     <td>
                       <span
@@ -1450,9 +1554,27 @@ export default function MerchantPage({
                       {c.raw_text}
                     </td>
                     <td className="num mono" style={{ fontWeight: 600 }}>
-                      {amountMinor > 0
-                        ? formatMoney(amountMinor, rowCurrency)
-                        : "—"}
+                      <div>
+                        {amountMinor > 0
+                          ? formatMoney(amountMinor, rowCurrency)
+                          : "—"}
+                      </div>
+                      {negotiated && negotiated.marginSavedMinor > 0 && (
+                        <div
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: "var(--status-success-fg)",
+                          }}
+                          title={`AI Negotiator (${negotiated.optionTitle}): Retained ${formatMoney(negotiated.marginSavedMinor, rowCurrency)} cash`}
+                        >
+                          Saved{" "}
+                          {formatMoney(
+                            negotiated.marginSavedMinor,
+                            rowCurrency,
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <span className={`badge ${c.status}`}>
@@ -1685,6 +1807,29 @@ export default function MerchantPage({
 
             <button
               type="button"
+              className={`ops-nav-item ${tab === "mcp" ? "active" : ""}`}
+              onClick={() => setTab("mcp")}
+              aria-current={tab === "mcp" ? "page" : undefined}
+            >
+              <span className="ops-nav-item-left">
+                <svg
+                  className="ops-nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+                <span>PayPal MCP Firewall</span>
+              </span>
+              <span className="ops-nav-badge">5 tools</span>
+            </button>
+
+            <button
+              type="button"
               className={`ops-nav-item ${tab === "totals" ? "active" : ""}`}
               onClick={() => setTab("totals")}
               aria-current={tab === "totals" ? "page" : undefined}
@@ -1745,6 +1890,16 @@ export default function MerchantPage({
                     : "Trigger Over-Cap Escalation"}
                 </span>
                 <span className="mono muted">Test</span>
+              </button>
+              <button
+                type="button"
+                className="btn xs secondary"
+                style={{ width: "100%", justifyContent: "space-between" }}
+                onClick={() => setTab("mcp")}
+                title="Inspect Guarded PayPal MCP Server & Agent Financial Firewall"
+              >
+                <span>PayPal MCP Firewall</span>
+                <span className="mono muted">MCP</span>
               </button>
               <button
                 type="button"
@@ -2178,6 +2333,103 @@ export default function MerchantPage({
                 </div>
               </section>
 
+              {/* AI Margin-Retention Negotiator & Guarded MCP Telemetry Strip */}
+              <section
+                className="ops-kpi-grid"
+                style={{ gridTemplateColumns: "repeat(3, 1fr)" }}
+                aria-label="AI Margin Retention and MCP Firewall Telemetry"
+              >
+                <div className="ops-kpi-cell">
+                  <div className="ops-kpi-label">
+                    <span>Net Cash Retained (AI Negotiator)</span>
+                    <span className="badge refunded">3-Way Smart Offer</span>
+                  </div>
+                  <div
+                    className="ops-kpi-value"
+                    style={{ color: "var(--status-success-fg)" }}
+                  >
+                    {formatMoney(
+                      marginStats.totalMarginSavedMinor +
+                        marginStats.totalShippingSavedMinor,
+                      currency,
+                    )}{" "}
+                    <span
+                      className="muted"
+                      style={{ fontSize: 12.5, fontWeight: 400 }}
+                    >
+                      saved across {marginStats.negotiationsCount} claims
+                    </span>
+                  </div>
+                  <div className="ops-kpi-sub">
+                    <span>
+                      {formatMoney(marginStats.totalMarginSavedMinor, currency)}{" "}
+                      PayPal cash +{" "}
+                      {formatMoney(
+                        marginStats.totalShippingSavedMinor,
+                        currency,
+                      )}{" "}
+                      shipping saved
+                    </span>
+                    <span className="mono">
+                      {marginStats.partialRefundAcceptCount} keep-item ·{" "}
+                      {marginStats.storeCreditAcceptCount} credit
+                    </span>
+                  </div>
+                </div>
+
+                <div className="ops-kpi-cell">
+                  <div className="ops-kpi-label">
+                    <span>Guarded PayPal MCP Server</span>
+                    <span className="code-pill">JSON-RPC 2.0</span>
+                  </div>
+                  <div className="ops-kpi-value" style={{ fontSize: 18 }}>
+                    5 Guarded Tools{" "}
+                    <span
+                      className="muted"
+                      style={{ fontSize: 12.5, fontWeight: 400 }}
+                    >
+                      · Policy Firewall Enforced
+                    </span>
+                  </div>
+                  <div className="ops-kpi-sub">
+                    <span>Blocks hallucinated LLM refund overrides</span>
+                    <button
+                      type="button"
+                      className="btn xs ghost"
+                      onClick={() => setTab("mcp")}
+                    >
+                      MCP Inspector →
+                    </button>
+                  </div>
+                </div>
+
+                <div className="ops-kpi-cell">
+                  <div className="ops-kpi-label">
+                    <span>Counterfactual Policy Replay</span>
+                    <span className="code-pill">What-If Engine</span>
+                  </div>
+                  <div className="ops-kpi-value" style={{ fontSize: 18 }}>
+                    Cap &amp; Velocity Sim{" "}
+                    <span
+                      className="muted"
+                      style={{ fontSize: 12.5, fontWeight: 400 }}
+                    >
+                      · Payer Trust Graph
+                    </span>
+                  </div>
+                  <div className="ops-kpi-sub">
+                    <span>Simulate cap changes on historical claims</span>
+                    <button
+                      type="button"
+                      className="btn xs ghost"
+                      onClick={() => setTab("policy")}
+                    >
+                      What-If Simulator →
+                    </button>
+                  </div>
+                </div>
+              </section>
+
               {/* Live Resolution Cases Queue on Command Center */}
               {renderCasesTableSection(true)}
 
@@ -2296,7 +2548,7 @@ export default function MerchantPage({
                     </div>
                     <div className="ops-pipeline-trace">
                       {detail?.audit_trail?.[0]
-                        ? `SETTLED: ${String(detail.audit_trail[0].paypal_refund_id ?? detail.audit_trail[0].id)}`
+                        ? `SETTLED: ${String(detail.audit_trail[0].paypal_refund_id ?? detail.audit_trail[0].refund_id ?? detail.audit_trail[0].id)}`
                         : activeTraceCase
                           ? `status: ${activeTraceCase.status}`
                           : `${totals?.refund_count ?? 0} settled refunds`}
@@ -2442,7 +2694,7 @@ export default function MerchantPage({
                   <div className="ops-kpi-sub">
                     <span>
                       {selectedBatchMinor > dailyRemainingMinor
-                        ? "Note: Manual approval overrides daily auto-cap"
+                        ? "Exceeds remaining daily cap — raise daily cap in Policy & Guardrails to approve full batch"
                         : "Within remaining daily cap"}
                     </span>
                   </div>
@@ -2861,10 +3113,26 @@ export default function MerchantPage({
                                 {itemSummary || "Order items"}
                               </div>
                               <div
-                                className="muted mono"
-                                style={{ fontSize: 11 }}
+                                className="row"
+                                style={{
+                                  gap: 6,
+                                  marginTop: 3,
+                                  flexWrap: "wrap",
+                                }}
                               >
-                                {o.payer_email}
+                                <span
+                                  className="muted mono"
+                                  style={{ fontSize: 11 }}
+                                >
+                                  {o.payer_email}
+                                </span>
+                                <PayerTrustPill
+                                  payerEmail={o.payer_email}
+                                  orderId={o.order_id}
+                                  allOrders={orders}
+                                  allCases={cases}
+                                  compact
+                                />
                               </div>
                             </td>
                             <td>
@@ -3508,6 +3776,18 @@ export default function MerchantPage({
                 </section>
               </div>
 
+              {/* Counterfactual Policy "What-If" Replay Simulator */}
+              <WhatIfSimulatorPanel
+                caps={caps}
+                rules={rules}
+                orders={orders}
+                cases={cases}
+                currency={currency}
+                onApplySimulatedCaps={(newCaps) =>
+                  void handleApplySimulatedCaps(newCaps)
+                }
+              />
+
               {/* Interactive Red-Team Prompt Injection Arena */}
               <section
                 id="red-team-arena"
@@ -3610,18 +3890,44 @@ export default function MerchantPage({
                           value={redTeamOrderId}
                           onChange={(e) => setRedTeamOrderId(e.target.value)}
                         >
-                          <option value="ORDER-001">
-                            ORDER-001 ($28.00 · Under Cap)
-                          </option>
-                          <option value="ORDER-002">
-                            ORDER-002 ($36.00 · Under Cap)
-                          </option>
-                          <option value="ORDER-003">
-                            ORDER-003 ($89.00 · Over $50 Cap)
-                          </option>
-                          <option value="ORDER-004">
-                            ORDER-004 ($42.00 · Under Cap)
-                          </option>
+                          {(orders.length > 0
+                            ? orders
+                            : [
+                                {
+                                  order_id: "ORDER-001",
+                                  amount_minor: 2800,
+                                  currency: "USD",
+                                },
+                                {
+                                  order_id: "ORDER-002",
+                                  amount_minor: 6400,
+                                  currency: "USD",
+                                },
+                                {
+                                  order_id: "ORDER-003",
+                                  amount_minor: 8900,
+                                  currency: "USD",
+                                },
+                                {
+                                  order_id: "ORDER-004",
+                                  amount_minor: 4800,
+                                  currency: "USD",
+                                },
+                              ]
+                          ).map((o) => {
+                            const perCap = caps?.per_refund_max_minor ?? 5000;
+                            const isOver = o.amount_minor > perCap;
+                            return (
+                              <option key={o.order_id} value={o.order_id}>
+                                {o.order_id} (
+                                {formatMoney(o.amount_minor, o.currency)} ·{" "}
+                                {isOver
+                                  ? `Over ${formatMoney(perCap, o.currency)} Cap`
+                                  : "Under Cap"}
+                                )
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
                       <button
@@ -4106,6 +4412,40 @@ export default function MerchantPage({
               </div>
             </>
           )}
+
+          {/* ================================================================
+              VIEW 8: GUARDED PAYPAL MCP SERVER & AGENT FIREWALL
+             ================================================================ */}
+          {tab === "mcp" && (
+            <>
+              <div className="ops-page-header">
+                <div className="ops-page-title-group">
+                  <div className="ops-page-title-row">
+                    <h1 className="ops-page-title">
+                      Guarded PayPal MCP Server &amp; Agent Firewall
+                    </h1>
+                    <span className="code-pill">MCP 2024-11-05</span>
+                    <span className="badge refunded">
+                      Deterministic Firewall Active
+                    </span>
+                  </div>
+                  <p className="ops-page-desc">
+                    Connect external AI agents (Claude Desktop, Cursor, OpenAI
+                    Agents) to PayPal Orders, Captures, and Disputes through
+                    Settle’s non-bypassable policy &amp; financial cap firewall.
+                  </p>
+                </div>
+              </div>
+
+              <McpInspectorPanel
+                merchantId={merchantId}
+                orders={orders}
+                disputes={disputes}
+                caps={caps}
+                onOrderMutated={() => void refreshAll(merchantId)}
+              />
+            </>
+          )}
         </main>
       </div>
 
@@ -4222,6 +4562,84 @@ export default function MerchantPage({
                   </div>
                 </div>
               )}
+
+              {/* PayPal Payer Velocity & Serial-Refund Abuse Graph */}
+              <PayerTrustInspectorCard
+                payerEmail={
+                  orders.find((o) => o.order_id === detail.order_id)
+                    ?.payer_email
+                }
+                orderId={detail.order_id}
+                allOrders={orders}
+                allCases={cases}
+              />
+
+              {/* AI Smart Settlement Negotiation Record (if applicable) */}
+              {(() => {
+                const neg = getNegotiationForCase(detail.id, detail.order_id);
+                if (!neg) return null;
+                return (
+                  <div className="drawer-section">
+                    <div className="drawer-section-head">
+                      <span>AI Margin-Retention Smart Settlement</span>
+                      <span className="badge refunded">
+                        {neg.marginSavedMinor > 0
+                          ? `Saved ${formatMoney(neg.marginSavedMinor, neg.currency)} Cash`
+                          : "100% Standard Policy"}
+                      </span>
+                    </div>
+                    <div className="drawer-section-body">
+                      <div className="ops-kv-grid">
+                        <div className="ops-kv-item">
+                          <span className="ops-kv-label">
+                            Selected Settlement Path
+                          </span>
+                          <span className="ops-kv-val" style={{ fontSize: 12 }}>
+                            {neg.optionTitle}
+                          </span>
+                        </div>
+                        <div className="ops-kv-item">
+                          <span className="ops-kv-label">
+                            Buyer Value Received
+                          </span>
+                          <span className="ops-kv-val mono">
+                            {formatMoney(neg.buyerPayoutMinor, neg.currency)}
+                          </span>
+                        </div>
+                        <div className="ops-kv-item">
+                          <span className="ops-kv-label">
+                            PayPal Cash Outflow
+                          </span>
+                          <span className="ops-kv-val mono">
+                            {formatMoney(
+                              neg.paypalCashOutflowMinor,
+                              neg.currency,
+                            )}
+                          </span>
+                        </div>
+                        <div className="ops-kv-item">
+                          <span className="ops-kv-label">
+                            Merchant Cash Retained
+                          </span>
+                          <span
+                            className="ops-kv-val mono"
+                            style={{
+                              fontWeight: 700,
+                              color:
+                                neg.marginSavedMinor > 0
+                                  ? "var(--status-success-fg)"
+                                  : "var(--fg-secondary)",
+                            }}
+                          >
+                            {formatMoney(neg.marginSavedMinor, neg.currency)}
+                            {neg.voucherCode ? ` (${neg.voucherCode})` : ""}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Customer Complaint */}
               <div className="drawer-section">

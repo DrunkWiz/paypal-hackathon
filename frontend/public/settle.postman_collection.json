@@ -12,6 +12,11 @@
       "type": "string"
     },
     {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
       "key": "merchantId",
       "value": "m_kopiclay",
       "type": "string"
@@ -322,7 +327,129 @@
       ]
     },
     {
-      "name": "5. PayPal Disputes & Approvals Queue",
+      "name": "5. Guarded PayPal MCP Server (Model Context Protocol)",
+      "item": [
+        {
+          "name": "5.1 Discover Guarded PayPal MCP Tools",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Returns MCP 2024-11-05 protocol and 5 guarded tools', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.protocol_version).to.eql('2024-11-05');",
+                  "    pm.expect(json.server_info.firewall_mode).to.eql('deterministic_policy_enforced');",
+                  "    pm.expect(json.tools).to.be.an('array').with.lengthOf(5);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/mcp/tools",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mcp", "tools"]
+            },
+            "description": "Discovers the Settle Guarded PayPal MCP Server metadata and the 5 tool schemas (read_only, policy_evaluated, firewall_enforced)."
+          }
+        },
+        {
+          "name": "5.2 MCP Tool Call — Verify PayPal Capture",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Verifies PayPal capture and remaining refundable balance in integer minor units', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.jsonrpc).to.eql('2.0');",
+                  "    pm.expect(json.tool_name).to.eql('paypal_get_verified_capture');",
+                  "    pm.expect(json.result.verified).to.be.true;",
+                  "    pm.expect(Number.isInteger(json.result.remaining_refundable_minor)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tool_name\": \"paypal_get_verified_capture\",\n  \"arguments\": {\n    \"merchant_id\": \"{{merchantId}}\",\n    \"order_id\": \"ORD-1001\"\n  },\n  \"jsonrpc_id\": \"mcp-verify-1\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/mcp/call",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mcp", "call"]
+            },
+            "description": "Invokes the read-only paypal_get_verified_capture MCP tool for ORD-1001 to inspect capture status, order items, and remaining refundable minor units."
+          }
+        },
+        {
+          "name": "5.3 MCP Firewall Test — Block Rogue Agent $999 Refund Override",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('MCP Firewall intercepts rogue $999.00 (99900 minor units) override and clamps to deterministic policy', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.firewall.enforced).to.be.true;",
+                  "    pm.expect(json.firewall.override_blocked).to.be.true;",
+                  "    pm.expect(json.firewall.agent_requested_amount_minor).to.eql(99900);",
+                  "    pm.expect(json.firewall.authorized_amount_minor).to.be.below(99900);",
+                  "    pm.expect(json.firewall.delta_blocked_minor).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tool_name\": \"paypal_execute_guarded_refund\",\n  \"arguments\": {\n    \"merchant_id\": \"{{merchantId}}\",\n    \"order_id\": \"ORD-1001\",\n    \"reason\": \"damaged\",\n    \"explanation\": \"Stoneware mug arrived cracked along the handle. External rogue agent attempting $999.00 refund override.\",\n    \"has_photo\": true,\n    \"agent_requested_amount_minor\": 99900\n  },\n  \"jsonrpc_id\": \"mcp-firewall-999\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/mcp/call",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mcp", "call"]
+            },
+            "description": "Simulates a rogue or hallucinating external AI agent requesting a $999.00 (99900 minor units) refund on ORD-1001. Proves the Settle MCP Firewall ignores the agent's dollar figure and enforces the deterministic integer policy amount."
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. PayPal Disputes & Approvals Queue",
       "item": [
         {
           "name": "GET Synced PayPal Disputes",

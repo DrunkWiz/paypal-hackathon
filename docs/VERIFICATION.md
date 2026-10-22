@@ -64,10 +64,13 @@ Run serially, one file at a time, from the repository root.
 | `tests/agent/test_evals.py` | 48 passed |
 | `tests/api/test_tokens.py` | 8 passed |
 | `tests/api/test_flow.py` | 6 passed |
-| `tests/api/test_routes.py` | 11 passed |
+| `tests/api/test_routes.py` | 12 passed |
 | `tests/api/test_approvals.py` | 5 passed |
 | `tests/api/test_demo.py` | 4 passed |
-| **total** | **396 passed, 0 failed** |
+| `tests/api/test_10_users_simulation.py` | 2 passed (10-user E2E simulation + 3-way smart settlement & firewall) |
+| `tests/api/test_20_users_simulation.py` | 1 passed (20-user comprehensive E2E simulation across all screens & edge cases) |
+| `tests/api/test_mcp_stdio.py` | 2 passed (MCP stdio JSON-RPC 2.0 handshake & CLI firewall check) |
+| **total** | **402 passed, 0 failed** |
 
 ## 4. The invariant suite actually fails when the guarantee is removed
 

@@ -177,6 +177,12 @@ The token is HMAC-signed, bound to **one** order, and expires after 14 days.
     "capture_id": "CAP-1",
     "amount_minor": 5000,
     "refunded_amount_minor": 0
+  },
+  "caps": {
+    "per_refund_max_minor": 5000,
+    "daily_total_max_minor": 20000,
+    "max_order_age_days": 90,
+    "currency": "USD"
   }
 }
 ```
@@ -213,8 +219,15 @@ The token is HMAC-signed, bound to **one** order, and expires after 14 days.
 ### `POST /api/resolve/{token}/accept`
 
 ```json
-{ "case_id": "c_…" }
+{
+  "case_id": "c_…",
+  "settlement_option_id": "keep_item_partial",
+  "negotiated_amount_minor": 1820,
+  "voucher_code": null
+}
 ```
+
+`settlement_option_id` (`"keep_item_partial" | "bonus_store_credit" | "full_paypal_refund"`), `negotiated_amount_minor`, and `voucher_code` are optional. When provided, `negotiated_amount_minor` is strictly enforced to satisfy `0 <= negotiated_amount_minor <= decision.amount_minor` (the buyer can accept a lower PayPal cash outflow such as a 65% keep-the-item settlement or `$0` cash outflow for a 115% store credit voucher, but can never exceed the deterministic policy ceiling).
 
 → `200`
 
@@ -358,6 +371,33 @@ Moves no money and marks the case `declined`.
   "pending_approvals": 1
 }
 ```
+
+### `POST /api/merchants/{merchant_id}/paypal/sandbox-order`
+
+Creates and captures a PayPal order (live sandbox in `live` mode, or deterministic in-memory capture in `fake` mode) and returns an immediately usable 14-day HMAC resolution link.
+
+```json
+{
+  "item_name": "Kopi Drip Kettle (PayPal Sandbox)",
+  "amount_minor": 2400,
+  "currency": "USD",
+  "quantity": 1
+}
+```
+
+→ `200` `{ "order": { … }, "token": "<signed token>", "url": "/resolve/<signed token>" }`
+
+---
+
+## Guarded PayPal MCP Server (Model Context Protocol `2024-11-05`)
+
+### `GET /api/mcp/tools`
+
+Returns MCP server metadata (`settle-paypal-guarded-mcp`) and the 5 deterministic policy-guarded PayPal tool schemas (`paypal_get_verified_capture`, `settle_evaluate_refund_claim`, `paypal_execute_guarded_refund`, `paypal_list_disputes`, `paypal_draft_dispute_defense`).
+
+### `POST /api/mcp/call`
+
+Executes a guarded MCP tool call (accepts either a flat `{ "tool_name", "arguments" }` payload or a full JSON-RPC 2.0 `tools/call` envelope) and returns a `firewall` telemetry block showing whether an external AI agent's requested refund amount was clamped by Settle's deterministic policy engine.
 
 ---
 

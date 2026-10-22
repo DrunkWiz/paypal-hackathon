@@ -117,9 +117,21 @@ export default function LandingPage({
       .health()
       .then(setHealth)
       .catch(() => null);
+    let activeMerchantId = "m_kopiclay";
+    try {
+      activeMerchantId = localStorage.getItem("settle.merchantId") || "m_kopiclay";
+    } catch {
+      // ignore storage errors
+    }
     api
-      .totals("m_kopiclay")
-      .then(setTotals)
+      .totals(activeMerchantId)
+      .catch(() => api.totals("m_kopiclay"))
+      .then((t) => {
+        setTotals(t);
+        if (t?.per_refund_max_minor) {
+          setSimCapMinor(t.per_refund_max_minor);
+        }
+      })
       .catch(() => null);
   }, []);
 
@@ -300,7 +312,11 @@ export default function LandingPage({
               </div>
               <div className="tk-telemetry-cell">
                 <span className="tk-telemetry-label">Hard Per-Refund Cap</span>
-                <span className="tk-telemetry-val mono">USD 50.00</span>
+                <span className="tk-telemetry-val mono">
+                  {totals
+                    ? formatMoney(totals.per_refund_max_minor, totals.currency)
+                    : "USD 50.00"}
+                </span>
               </div>
               <div className="tk-telemetry-cell">
                 <span className="tk-telemetry-label">Settled Today</span>

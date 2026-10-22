@@ -30,6 +30,7 @@ from contracts import (
     GatewayTimeout,
     NotFoundError,
     Order,
+    OrderItem,
     PayPalRejectedError,
     PayPalTransientError,
     Refund,
@@ -74,6 +75,47 @@ class FakePayPalGateway:
 
     def add_dispute(self, dispute: Dispute) -> None:
         self._disputes[dispute.dispute_id] = dispute
+
+    def create_sandbox_order(
+        self,
+        item_name: str = "Kopi Drip Kettle (PayPal Sandbox)",
+        amount_minor: int = 2400,
+        currency: str = "USD",
+        quantity: int = 1,
+    ) -> Order:
+        self._counter += 1
+        order_id = "SANDBOX-%04d" % self._counter
+        capture_id = "CAP-SBX-%04d" % self._counter
+        qty = max(1, int(quantity))
+        total_minor = int(amount_minor) * qty
+        now = self._clock()
+        capture = Capture(
+            capture_id=capture_id,
+            order_id=order_id,
+            status="COMPLETED",
+            amount_minor=total_minor,
+            currency=currency,
+            refunded_amount_minor=0,
+            created_at=now,
+        )
+        order = Order(
+            order_id=order_id,
+            status="COMPLETED",
+            amount_minor=total_minor,
+            currency=currency,
+            created_at=now,
+            payer_email="sb-buyer@personal.example.com",
+            captures=(capture,),
+            items=(
+                OrderItem(
+                    name=item_name,
+                    quantity=qty,
+                    unit_amount_minor=int(amount_minor),
+                ),
+            ),
+        )
+        self.add_order(order)
+        return order
 
     def inject_fault(self, operation: str, kind: str) -> None:
         """Queue a fault for the next call to ``operation``."""

@@ -64,10 +64,24 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  accept: (token: string, caseId: string) =>
+  accept: (
+    token: string,
+    caseId: string,
+    options?: {
+      settlement_option_id?: string;
+      negotiated_amount_minor?: number;
+      voucher_code?: string;
+    },
+  ) =>
     request<AcceptResponse>(
       `/api/resolve/${encodeURIComponent(token)}/accept`,
-      { method: "POST", body: JSON.stringify({ case_id: caseId }) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          case_id: caseId,
+          ...(options ?? {}),
+        }),
+      },
     ),
 
   decline: (token: string, caseId: string) =>
@@ -165,7 +179,13 @@ export const api = {
     ),
 
   approveApproval: (merchantId: string, approvalId: number) =>
-    request<{ status: string }>(
+    request<{
+      status: string;
+      reason?: string;
+      amount_minor?: number;
+      refund_id?: string;
+      ceiling_minor?: number;
+    }>(
       `/api/merchants/${encodeURIComponent(merchantId)}/approvals/${approvalId}/approve`,
       { method: "POST" },
     ),
@@ -183,4 +203,21 @@ export const api = {
 
   totals: (merchantId: string) =>
     request<Totals>(`/api/merchants/${encodeURIComponent(merchantId)}/totals`),
+
+  mcpTools: () =>
+    request<{
+      protocol_version: string;
+      server_info: Record<string, unknown>;
+      tools: Array<Record<string, unknown>>;
+    }>("/api/mcp/tools"),
+
+  mcpCall: (body: {
+    tool_name: string;
+    arguments: Record<string, unknown>;
+    jsonrpc_id?: string;
+  }) =>
+    request<Record<string, unknown>>("/api/mcp/call", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

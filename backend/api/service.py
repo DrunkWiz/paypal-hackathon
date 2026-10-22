@@ -327,6 +327,12 @@ def record_audit(
 
 
 def queue_approval(conn, merchant_id: str, case_row, decision_row, now: datetime) -> None:
+    existing = conn.execute(
+        "SELECT id FROM approvals WHERE case_id = ? LIMIT 1",
+        (case_row["id"],),
+    ).fetchone()
+    if existing is not None:
+        return
     conn.execute(
         "INSERT INTO approvals "
         "(merchant_id, case_id, amount_minor, currency, reason, status, created_at) "

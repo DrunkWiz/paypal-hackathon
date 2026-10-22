@@ -1,8 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { api } from "../api";
+import {
+  buildSmartSettlementOptions,
+  recordNegotiationChoice,
+} from "../smartNegotiator";
+import type {
+  NegotiationRecord,
+  SettlementOptionId,
+  SmartSettlementOption,
+} from "../smartNegotiator";
 import { formatMoney } from "../types";
 import type { AcceptResponse, ClassifyResponse, SessionResponse } from "../types";
 import {
@@ -90,17 +99,113 @@ export default function ResolvePage() {
   const [receipt, setReceipt] = useState<AcceptResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [switchingOrder, setSwitchingOrder] = useState(false);
+  const [selectedOptionId, setSelectedOptionId] =
+    useState<SettlementOptionId>("keep_item_partial");
+  const [negotiationRecord, setNegotiationRecord] =
+    useState<NegotiationRecord | null>(null);
+  const [copiedVoucher, setCopiedVoucher] = useState(false);
+
+  const settlementOptions = useMemo<SmartSettlementOption[]>(() => {
+    if (!result || result.decision.amount_minor <= 0 || !session) return [];
+    return buildSmartSettlementOptions({
+      orderId: session.order_id,
+      caseId: result.case_id,
+      authorizedRefundMinor: result.decision.amount_minor,
+      currency: result.decision.currency || session.currency,
+      reason: result.category,
+      itemName: session.items[0]?.name,
+    });
+  }, [result, session]);
+
+  const selectedOption = useMemo<SmartSettlementOption | null>(() => {
+    if (settlementOptions.length === 0) return null;
+    return (
+      settlementOptions.find((opt) => opt.id === selectedOptionId) ??
+      settlementOptions[0]
+    );
+  }, [settlementOptions, selectedOptionId]);
+
+  useEffect(() => {
+    if (!result || result.decision.amount_minor <= 0 || !session) {
+      setNegotiationRecord(null);
+      return;
+    }
+    const opts = buildSmartSettlementOptions({
+      orderId: session.order_id,
+      caseId: result.case_id,
+      authorizedRefundMinor: result.decision.amount_minor,
+      currency: result.decision.currency || session.currency,
+      reason: result.category,
+      itemName: session.items[0]?.name,
+    });
+    const recommended = opts.find((opt) => opt.recommended) ?? opts[0];
+    if (recommended) {
+      setSelectedOptionId(recommended.id);
+      const initialRec: NegotiationRecord = {
+        caseId: result.case_id,
+        orderId: session.order_id,
+        optionId: recommended.id,
+        optionTitle: recommended.title,
+        originalRefundMinor: result.decision.amount_minor,
+        buyerPayoutMinor: recommended.buyerPayoutMinor,
+        paypalCashOutflowMinor: recommended.paypalCashOutflowMinor,
+        marginSavedMinor: recommended.marginSavedMinor,
+        currency: result.decision.currency || session.currency,
+        voucherCode: recommended.voucherCode,
+        acceptedAt: new Date().toISOString(),
+      };
+      setNegotiationRecord(initialRec);
+    }
+  }, [result, session]);
+
+  const handleSelectSettlementOption = useCallback(
+    (opt: SmartSettlementOption) => {
+      setSelectedOptionId(opt.id);
+      setCopiedVoucher(false);
+      if (result && session) {
+        const rec: NegotiationRecord = {
+          caseId: result.case_id,
+          orderId: session.order_id,
+          optionId: opt.id,
+          optionTitle: opt.title,
+          originalRefundMinor: result.decision.amount_minor,
+          buyerPayoutMinor: opt.buyerPayoutMinor,
+          paypalCashOutflowMinor: opt.paypalCashOutflowMinor,
+          marginSavedMinor: opt.marginSavedMinor,
+          currency: result.decision.currency || session.currency,
+          voucherCode: opt.voucherCode,
+          acceptedAt: new Date().toISOString(),
+        };
+        setNegotiationRecord(rec);
+      }
+    },
+    [result, session],
+  );
+
+  const visionTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (visionTimerRef.current !== null) {
+        window.clearTimeout(visionTimerRef.current);
+      }
+    };
+  }, []);
 
   const selectVisionPreset = useCallback(
     (preset: VisionEvidencePreset, syncComplaint = false) => {
+      if (visionTimerRef.current !== null) {
+        window.clearTimeout(visionTimerRef.current);
+      }
       setVisionScanning(true);
       setSelectedVision(preset);
       setHasPhoto(preset.passesPhotoRequirement);
       if (syncComplaint) {
         setText(preset.suggestedComplaint);
       }
-      window.setTimeout(() => {
+      visionTimerRef.current = window.setTimeout(() => {
         setVisionScanning(false);
+        visionTimerRef.current = null;
       }, 280);
     },
     [],
@@ -161,7 +266,8 @@ export default function ResolvePage() {
         .session(currentToken)
         .then(async (data) => {
           setSession(data);
-          if (data.amount_minor > 5000) {
+          const perCapMinor = data.caps?.per_refund_max_minor ?? 5000;
+          if (data.amount_minor > perCapMinor) {
             const defaultComplaint =
               "You sent the wrong item instead of what I ordered.";
             setText(defaultComplaint);
@@ -171,7 +277,7 @@ export default function ResolvePage() {
             if (autoEvaluateOverCap) {
               setStage("classifying");
               setProgress(
-                "Evaluating $89.00 order against $50.00 per-refund hard cap…",
+                `Evaluating ${formatMoney(data.amount_minor, data.currency)} order against ${formatMoney(perCapMinor, data.currency)} per-refund hard cap…`,
               );
               try {
                 const classified = await api.classify(currentToken, {
@@ -265,9 +371,45 @@ export default function ResolvePage() {
   const accept = useCallback(async () => {
     if (!result) return;
     setError(null);
-    setProgress("Sending your refund…");
+    setProgress("Sending your settlement…");
     try {
-      const data = await api.accept(token, result.case_id);
+      const canNegotiate =
+        !result.decision.needs_approval &&
+        Boolean(selectedOption) &&
+        result.decision.amount_minor > 0;
+      const data = await api.accept(
+        token,
+        result.case_id,
+        canNegotiate && selectedOption
+          ? {
+              settlement_option_id: selectedOption.id,
+              negotiated_amount_minor: selectedOption.paypalCashOutflowMinor,
+              voucher_code: selectedOption.voucherCode,
+            }
+          : undefined,
+      );
+      if (
+        canNegotiate &&
+        session &&
+        selectedOption &&
+        (data.status === "refunded" || data.status === "already_refunded")
+      ) {
+        const rec: NegotiationRecord = {
+          caseId: result.case_id,
+          orderId: session.order_id,
+          optionId: selectedOption.id,
+          optionTitle: selectedOption.title,
+          originalRefundMinor: result.decision.amount_minor,
+          buyerPayoutMinor: selectedOption.buyerPayoutMinor,
+          paypalCashOutflowMinor: selectedOption.paypalCashOutflowMinor,
+          marginSavedMinor: selectedOption.marginSavedMinor,
+          currency: result.decision.currency || session.currency,
+          voucherCode: selectedOption.voucherCode,
+          acceptedAt: new Date().toISOString(),
+        };
+        setNegotiationRecord(rec);
+        recordNegotiationChoice(rec);
+      }
       setReceipt(data);
       setStage(data.status === "needs_approval" ? "needs_approval" : "accepted");
       setProgress("");
@@ -276,7 +418,7 @@ export default function ResolvePage() {
       setError(err instanceof Error ? err.message : String(err));
       setProgress("");
     }
-  }, [token, result, loadSession]);
+  }, [token, result, session, selectedOption, loadSession]);
 
   const decline = useCallback(async () => {
     if (!result) return;
@@ -338,6 +480,7 @@ export default function ResolvePage() {
   const refundableMinor = session.capture
     ? Math.max(0, session.capture.amount_minor - session.capture.refunded_amount_minor)
     : session.amount_minor;
+  const perRefundCapMinor = session.caps?.per_refund_max_minor ?? 5000;
 
   const step1Done = stage !== "idle" && stage !== "classifying";
   const step2Active = stage === "offer";
@@ -356,7 +499,7 @@ export default function ResolvePage() {
             <div>
               <div className="shop-title-row">
                 <h1>
-                  {session.amount_minor > 5000
+                  {session.amount_minor > perRefundCapMinor
                     ? `Over-Cap Order Resolution (${formatMoney(session.amount_minor, session.currency)})`
                     : "Something went wrong with an order"}
                 </h1>
@@ -366,9 +509,9 @@ export default function ResolvePage() {
                 <span className="badge badge-success">
                   HMAC-Verified Session
                 </span>
-                {session.amount_minor > 5000 ? (
+                {session.amount_minor > perRefundCapMinor ? (
                   <span className="badge badge-warning">
-                    Exceeds USD 50.00 Per-Refund Cap
+                    Exceeds {formatMoney(perRefundCapMinor, session.currency)} Per-Refund Cap
                   </span>
                 ) : null}
                 <span className="hero-code-pill">{session.order_id}</span>
@@ -905,12 +1048,39 @@ export default function ResolvePage() {
               </div>
 
               {result.decision.amount_minor > 0 ? (
-                <p className="amount" aria-label="refund amount">
-                  {formatMoney(
-                    result.decision.amount_minor,
-                    result.decision.currency,
-                  )}
-                </p>
+                <div>
+                  <p className="amount" aria-label="refund amount">
+                    {formatMoney(
+                      selectedOption && !result.decision.needs_approval
+                        ? selectedOption.buyerPayoutMinor
+                        : result.decision.amount_minor,
+                      result.decision.currency,
+                    )}
+                  </p>
+                  {selectedOption &&
+                  !result.decision.needs_approval &&
+                  selectedOption.buyerPayoutMinor !==
+                    result.decision.amount_minor ? (
+                    <p
+                      className="tiny muted"
+                      style={{ marginTop: "-0.25rem", marginBottom: "0.25rem" }}
+                    >
+                      Selected{" "}
+                      <strong>
+                        {selectedOption.id === "keep_item_partial"
+                          ? "Keep-Item + 65% Instant Refund"
+                          : "115% Bonus Store Credit"}
+                      </strong>{" "}
+                      · Policy-authorized baseline:{" "}
+                      <span className="mono">
+                        {formatMoney(
+                          result.decision.amount_minor,
+                          result.decision.currency,
+                        )}
+                      </span>
+                    </p>
+                  ) : null}
+                </div>
               ) : (
                 <p className="amount muted">No automatic refund on this one.</p>
               )}
@@ -964,19 +1134,278 @@ export default function ResolvePage() {
                 </div>
               </div>
 
+              {/* AI Margin-Retention Negotiator · 3-Way Instant Settlement */}
+              {result.decision.amount_minor > 0 &&
+              !result.decision.needs_approval &&
+              settlementOptions.length > 0 &&
+              selectedOption ? (
+                <div
+                  className="card-subtle stack"
+                  style={{
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "1.05rem",
+                    background:
+                      "linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, rgba(59, 130, 246, 0.03) 100%)",
+                  }}
+                  aria-label="AI Margin-Retention Negotiator 3-Way Instant Settlement"
+                >
+                  <div className="row between wrap" style={{ gap: "0.5rem" }}>
+                    <div>
+                      <div
+                        className="row wrap"
+                        style={{ gap: "0.45rem", alignItems: "center" }}
+                      >
+                        <span className="badge badge-pill badge-info no-dot">
+                          AI SMART SETTLEMENT ENGINE
+                        </span>
+                        <strong style={{ fontSize: "0.96rem" }}>
+                          AI Margin-Retention Negotiator · 3-Way Instant Settlement
+                        </strong>
+                      </div>
+                      <p
+                        className="muted small"
+                        style={{ margin: "0.25rem 0 0" }}
+                      >
+                        Choose how you’d like to settle today. Instant keep-item and
+                        bonus credit options waive return shipping and unlock faster
+                        value.
+                      </p>
+                    </div>
+
+                    <span
+                      className={
+                        selectedOption.marginSavedMinor > 0
+                          ? "badge badge-pill badge-success"
+                          : "badge badge-pill badge-neutral no-dot"
+                      }
+                      style={{ fontWeight: 700 }}
+                    >
+                      {selectedOption.id === "bonus_store_credit"
+                        ? `Retains 100% PayPal Cash (${formatMoney(selectedOption.marginSavedMinor, result.decision.currency)}) + Saves ${formatMoney(selectedOption.returnShippingSavedMinor, result.decision.currency)} Return Label`
+                        : selectedOption.id === "keep_item_partial"
+                          ? `Saves ${formatMoney(selectedOption.marginSavedMinor, result.decision.currency)} Merchant Cash + ${formatMoney(selectedOption.returnShippingSavedMinor, result.decision.currency)} Return Shipping`
+                          : `Standard 100% Cash Outflow (${formatMoney(0, result.decision.currency)} Margin Saved)`}
+                    </span>
+                  </div>
+
+                  {/* Interactive 3-Card Selector Grid */}
+                  <div
+                    role="radiogroup"
+                    aria-label="Settlement options"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(225px, 1fr))",
+                      gap: "0.8rem",
+                      marginTop: "0.25rem",
+                    }}
+                  >
+                    {settlementOptions.map((option) => {
+                      const isSelected = selectedOption.id === option.id;
+                      const bonusMinor = Math.max(
+                        0,
+                        option.buyerPayoutMinor - result.decision.amount_minor,
+                      );
+                      return (
+                        <div
+                          key={option.id}
+                          role="radio"
+                          aria-checked={isSelected}
+                          tabIndex={0}
+                          onClick={() => handleSelectSettlementOption(option)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleSelectSettlementOption(option);
+                            }
+                          }}
+                          style={{
+                            cursor: "pointer",
+                            borderRadius: "10px",
+                            padding: "0.9rem",
+                            border: isSelected
+                              ? "2px solid var(--accent, #2563eb)"
+                              : "1px solid var(--border)",
+                            background: isSelected
+                              ? "var(--surface, #ffffff)"
+                              : "var(--bg)",
+                            boxShadow: isSelected
+                              ? "0 6px 18px rgba(37, 99, 235, 0.12)"
+                              : "none",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                            gap: "0.65rem",
+                            transition: "all 150ms ease",
+                          }}
+                        >
+                          <div className="stack" style={{ gap: "0.45rem" }}>
+                            <div
+                              className="row between wrap"
+                              style={{ gap: "0.35rem" }}
+                            >
+                              <span
+                                className={
+                                  option.recommended
+                                    ? "badge badge-pill badge-success"
+                                    : option.id === "full_paypal_refund"
+                                      ? "badge badge-pill badge-neutral no-dot"
+                                      : "badge badge-pill badge-info no-dot"
+                                }
+                                style={{ fontSize: "0.68rem" }}
+                              >
+                                {option.badge}
+                              </span>
+                              <span
+                                className="mono tiny"
+                                style={{
+                                  fontWeight: 700,
+                                  color: isSelected
+                                    ? "var(--accent, #2563eb)"
+                                    : "var(--muted)",
+                                }}
+                              >
+                                {isSelected ? "● Selected" : "○ Select"}
+                              </span>
+                            </div>
+
+                            <div
+                              style={{
+                                fontWeight: 700,
+                                fontSize: "0.93rem",
+                                lineHeight: 1.3,
+                              }}
+                            >
+                              {option.title}
+                            </div>
+
+                            <div
+                              className="row wrap"
+                              style={{
+                                alignItems: "baseline",
+                                gap: "0.45rem",
+                              }}
+                            >
+                              <span
+                                className="mono"
+                                style={{
+                                  fontSize: "1.35rem",
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {formatMoney(
+                                  option.buyerPayoutMinor,
+                                  result.decision.currency,
+                                )}
+                              </span>
+                              <span className="tiny muted">
+                                {option.id === "bonus_store_credit"
+                                  ? `(+${formatMoney(bonusMinor, result.decision.currency)} bonus)`
+                                  : option.id === "keep_item_partial"
+                                    ? "instant to PayPal"
+                                    : "full policy refund"}
+                              </span>
+                            </div>
+
+                            {option.voucherCode ? (
+                              <div
+                                className="mono tiny"
+                                style={{
+                                  padding: "0.25rem 0.5rem",
+                                  borderRadius: "4px",
+                                  background: "rgba(16, 185, 129, 0.12)",
+                                  border: "1px dashed rgba(16, 185, 129, 0.45)",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                Voucher: {option.voucherCode}
+                              </div>
+                            ) : null}
+
+                            <ul
+                              className="plain"
+                              style={{
+                                margin: "0.15rem 0 0",
+                                padding: 0,
+                                fontSize: "0.78rem",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.28rem",
+                              }}
+                            >
+                              {option.perks.map((perk) => (
+                                <li
+                                  key={perk}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    gap: "0.35rem",
+                                  }}
+                                >
+                                  <span
+                                    aria-hidden="true"
+                                    style={{
+                                      color: "#10b981",
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    ✓
+                                  </span>
+                                  <span>{perk}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div
+                            style={{
+                              borderTop: "1px solid var(--border)",
+                              paddingTop: "0.45rem",
+                              fontSize: "0.74rem",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <span className="muted">Merchant cash saved:</span>
+                            <strong
+                              className="mono"
+                              style={{
+                                color:
+                                  option.marginSavedMinor > 0
+                                    ? "#10b981"
+                                    : "inherit",
+                              }}
+                            >
+                              {formatMoney(
+                                option.marginSavedMinor,
+                                result.decision.currency,
+                              )}
+                            </strong>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="row wrap">
                 {result.decision.amount_minor > 0 &&
                 !result.decision.needs_approval ? (
                   <button type="button" className="btn primary" onClick={accept}>
-                    Accept{" "}
-                    {formatMoney(
-                      result.decision.amount_minor,
-                      result.decision.currency,
-                    )}
+                    {selectedOption?.id === "keep_item_partial"
+                      ? `Accept Keep-Item + ${formatMoney(selectedOption.buyerPayoutMinor, result.decision.currency)} Instant PayPal Refund`
+                      : selectedOption?.id === "bonus_store_credit"
+                        ? `Claim ${formatMoney(selectedOption.buyerPayoutMinor, result.decision.currency)} Instant Store Credit (+15% Bonus)`
+                        : `Accept ${formatMoney(result.decision.amount_minor, result.decision.currency)} Full PayPal Refund`}
                   </button>
                 ) : (
                   <button type="button" className="btn primary" onClick={accept}>
-                    Send this to the shop
+                    {selectedOption && result.decision.amount_minor > 0
+                      ? `Submit ${selectedOption.id === "keep_item_partial" ? "Keep-Item (" + formatMoney(selectedOption.buyerPayoutMinor, result.decision.currency) + ")" : selectedOption.id === "bonus_store_credit" ? "115% Store Credit (" + formatMoney(selectedOption.buyerPayoutMinor, result.decision.currency) + ")" : "Full Refund (" + formatMoney(selectedOption.buyerPayoutMinor, result.decision.currency) + ")"} for Approval`
+                      : "Send this to the shop"}
                   </button>
                 )}
                 <button type="button" className="btn" onClick={decline}>
@@ -1049,26 +1478,192 @@ export default function ResolvePage() {
                 <div className="row between wrap">
                   <h2 id="receipt-heading">You’re all set</h2>
                   <span className="badge badge-pill badge-success">
-                    PayPal Capture Refunded
+                    {negotiationRecord?.optionId === "bonus_store_credit"
+                      ? "Instant Store Credit Issued · 100% Cash Retained"
+                      : negotiationRecord?.optionId === "keep_item_partial"
+                        ? "Keep-Item Settlement + PayPal Refunded"
+                        : "PayPal Capture Refunded"}
                   </span>
                 </div>
                 <p className="amount">
                   {formatMoney(
-                    receipt.amount_minor ?? 0,
-                    receipt.currency ?? session.currency,
+                    negotiationRecord
+                      ? negotiationRecord.buyerPayoutMinor
+                      : (receipt.amount_minor ?? 0),
+                    negotiationRecord?.currency ??
+                      receipt.currency ??
+                      session.currency,
                   )}
                 </p>
                 <p>
-                  We refunded{" "}
-                  <strong>
-                    {formatMoney(
-                      receipt.amount_minor ?? 0,
-                      receipt.currency ?? session.currency,
-                    )}
-                  </strong>{" "}
-                  against capture{" "}
-                  <code>{session.capture?.capture_id ?? "CAP"}</code>.
+                  {negotiationRecord?.optionId === "bonus_store_credit" ? (
+                    <>
+                      Issued{" "}
+                      <strong>
+                        {formatMoney(
+                          negotiationRecord.buyerPayoutMinor,
+                          negotiationRecord.currency,
+                        )}
+                      </strong>{" "}
+                      in instant Kopi &amp; Clay store credit (+15% bonus over{" "}
+                      {formatMoney(
+                        negotiationRecord.originalRefundMinor,
+                        negotiationRecord.currency,
+                      )}{" "}
+                      policy baseline) linked to capture{" "}
+                      <code>{session.capture?.capture_id ?? "CAP"}</code>.
+                    </>
+                  ) : negotiationRecord?.optionId === "keep_item_partial" ? (
+                    <>
+                      Refunded{" "}
+                      <strong>
+                        {formatMoney(
+                          negotiationRecord.buyerPayoutMinor,
+                          negotiationRecord.currency,
+                        )}
+                      </strong>{" "}
+                      (65% instant settlement with return shipping waived) against
+                      capture <code>{session.capture?.capture_id ?? "CAP"}</code>.
+                    </>
+                  ) : (
+                    <>
+                      We refunded{" "}
+                      <strong>
+                        {formatMoney(
+                          receipt.amount_minor ?? 0,
+                          receipt.currency ?? session.currency,
+                        )}
+                      </strong>{" "}
+                      against capture{" "}
+                      <code>{session.capture?.capture_id ?? "CAP"}</code>.
+                    </>
+                  )}
                 </p>
+
+                {/* AI Smart Settlement Summary Banner */}
+                {negotiationRecord ? (
+                  <div
+                    className="card-subtle stack"
+                    style={{
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--radius-sm)",
+                      padding: "0.95rem",
+                      background:
+                        "linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.04) 100%)",
+                    }}
+                    aria-label="AI Smart Settlement Summary"
+                  >
+                    <div className="row between wrap">
+                      <span
+                        className="tiny mono"
+                        style={{ fontWeight: 800, letterSpacing: "0.05em" }}
+                      >
+                        AI SMART SETTLEMENT SUMMARY
+                      </span>
+                      <span className="badge badge-pill badge-success">
+                        {negotiationRecord.marginSavedMinor > 0
+                          ? `Saved Merchant ${formatMoney(negotiationRecord.marginSavedMinor, negotiationRecord.currency)}`
+                          : "Standard Policy Execution"}
+                      </span>
+                    </div>
+
+                    <div className="trace-grid">
+                      <div className="trace-cell">
+                        <div className="tiny muted">Selected Settlement Path</div>
+                        <div>
+                          <strong>{negotiationRecord.optionTitle}</strong>
+                        </div>
+                      </div>
+                      <div className="trace-cell">
+                        <div className="tiny muted">Buyer Value Received</div>
+                        <div className="mono" style={{ fontWeight: 700 }}>
+                          {formatMoney(
+                            negotiationRecord.buyerPayoutMinor,
+                            negotiationRecord.currency,
+                          )}
+                        </div>
+                      </div>
+                      <div className="trace-cell">
+                        <div className="tiny muted">Merchant Net Cash Retained</div>
+                        <div
+                          className="mono"
+                          style={{
+                            fontWeight: 700,
+                            color:
+                              negotiationRecord.marginSavedMinor > 0
+                                ? "#10b981"
+                                : "inherit",
+                          }}
+                        >
+                          {formatMoney(
+                            negotiationRecord.marginSavedMinor,
+                            negotiationRecord.currency,
+                          )}{" "}
+                          saved vs. full refund
+                        </div>
+                      </div>
+                    </div>
+
+                    {negotiationRecord.optionId === "bonus_store_credit" &&
+                    negotiationRecord.voucherCode ? (
+                      <div
+                        className="row between wrap"
+                        style={{
+                          padding: "0.6rem 0.85rem",
+                          borderRadius: "6px",
+                          border: "1px dashed rgba(16, 185, 129, 0.55)",
+                          background: "var(--bg)",
+                        }}
+                      >
+                        <div>
+                          <div className="tiny muted">
+                            Instant Store Credit Code (+15% Bonus Value)
+                          </div>
+                          <code
+                            style={{
+                              fontSize: "0.98rem",
+                              fontWeight: 800,
+                            }}
+                          >
+                            {negotiationRecord.voucherCode}
+                          </code>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn small"
+                          onClick={() => {
+                            if (
+                              navigator.clipboard &&
+                              negotiationRecord.voucherCode
+                            ) {
+                              void navigator.clipboard.writeText(
+                                negotiationRecord.voucherCode,
+                              );
+                            }
+                            setCopiedVoucher(true);
+                          }}
+                        >
+                          {copiedVoucher ? "Copied Code ✓" : "Copy Voucher Code"}
+                        </button>
+                      </div>
+                    ) : negotiationRecord.optionId === "keep_item_partial" ? (
+                      <div
+                        style={{
+                          padding: "0.55rem 0.8rem",
+                          borderRadius: "6px",
+                          border: "1px solid var(--border)",
+                          background: "var(--bg)",
+                          fontSize: "0.84rem",
+                        }}
+                      >
+                        <strong>Keep-the-Item Waiver Confirmed:</strong> You do
+                        not need to pack or return your item. Return label &amp;
+                        restocking overhead ($6.50) waived.
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="trace-grid">
                   <div className="trace-cell">
                     <div className="tiny muted">PayPal Refund ID</div>
@@ -1128,6 +1723,46 @@ export default function ResolvePage() {
                 automatic guardrail or requires human review, it has been placed in
                 Kopi &amp; Clay’s approval queue.
               </p>
+              {negotiationRecord ? (
+                <div
+                  className="card-subtle stack"
+                  style={{
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "0.85rem",
+                  }}
+                  aria-label="AI Smart Settlement Summary"
+                >
+                  <div className="row between wrap">
+                    <span className="tiny mono" style={{ fontWeight: 800 }}>
+                      AI SMART SETTLEMENT SUMMARY (PRE-SELECTED BY BUYER)
+                    </span>
+                    <span className="badge badge-pill badge-info no-dot">
+                      {negotiationRecord.optionTitle}
+                    </span>
+                  </div>
+                  <div className="trace-grid">
+                    <div className="trace-cell">
+                      <div className="tiny muted">Buyer Value Requested</div>
+                      <strong className="mono">
+                        {formatMoney(
+                          negotiationRecord.buyerPayoutMinor,
+                          negotiationRecord.currency,
+                        )}
+                      </strong>
+                    </div>
+                    <div className="trace-cell">
+                      <div className="tiny muted">Merchant Net Cash Retained</div>
+                      <strong className="mono">
+                        {formatMoney(
+                          negotiationRecord.marginSavedMinor,
+                          negotiationRecord.currency,
+                        )}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               <p className="muted small">
                 Case <code>{receipt.case_id}</code> · Reason:{" "}
                 <strong>{result?.decision.reason ?? "needs_approval"}</strong>

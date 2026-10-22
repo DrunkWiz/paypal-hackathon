@@ -53,6 +53,10 @@ def approve_refund(
     capture = gateway.get_capture(case_row["capture_id"])
 
     requested = int(row["amount_minor"])
+    if requested <= 0:
+        requested = max(
+            0, int(capture.amount_minor) - int(capture.refunded_amount_minor)
+        )
     ceiling = _ceiling(conn, merchant_id, capture, caps, now)
     amount = min(requested, ceiling)
     if amount <= 0:
@@ -148,6 +152,13 @@ def reject_approval(conn, merchant_id: str, approval_id: int) -> Dict[str, Any]:
     ).fetchone()
     if row is None:
         raise PolicyError("approval %s not found" % (approval_id,))
+
+    if row["status"] != "pending":
+        return {
+            "status": row["status"],
+            "approval_id": int(row["id"]),
+            "case_id": row["case_id"],
+        }
 
     conn.execute(
         "UPDATE approvals SET status = 'rejected' WHERE id = ?", (int(row["id"]),)

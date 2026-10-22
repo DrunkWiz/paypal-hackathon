@@ -34,6 +34,7 @@ export interface SessionResponse {
   status: string;
   currency: string;
   amount_minor: number;
+  caps?: Caps;
   items: Array<{ name: string; quantity: number }>;
   capture: {
     capture_id: string;
