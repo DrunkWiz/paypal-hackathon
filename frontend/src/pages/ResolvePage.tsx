@@ -844,7 +844,7 @@ export default function ResolvePage() {
                     display: "grid",
                     gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
                     gap: "0.9rem",
-                    alignItems: "stretch",
+                    alignItems: "start",
                   }}
                 >
                   {/* Left: Visual Frame with CV Bounding Boxes */}
@@ -855,7 +855,8 @@ export default function ResolvePage() {
                       overflow: "hidden",
                       border: "1px solid var(--border)",
                       background: "#0f172a",
-                      minHeight: "200px",
+                      aspectRatio: "800 / 475",
+                      width: "100%",
                     }}
                   >
                     <img
@@ -902,8 +903,8 @@ export default function ResolvePage() {
                             <span
                               style={{
                                 position: "absolute",
-                                top: "-19px",
-                                left: "-2px",
+                                top: box.yPct < 15 ? "2px" : "-19px",
+                                left: box.yPct < 15 ? "2px" : "-2px",
                                 background: strokeColor,
                                 color: "#090d16",
                                 fontSize: "9.5px",

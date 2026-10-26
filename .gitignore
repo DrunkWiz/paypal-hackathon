@@ -32,5 +32,9 @@ Thumbs.db
 # Local demo database
 data/
 
+# Large media binaries (host on YouTube / external CDN)
+*.mp4
+*.webm
+
 # Swarm reference material (inert)
 .swarm/

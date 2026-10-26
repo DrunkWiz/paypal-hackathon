@@ -4730,6 +4730,8 @@ export default function MerchantPage({
                           overflow: "hidden",
                           border: "1px solid var(--border-subtle)",
                           background: "#0f172a",
+                          aspectRatio: "800 / 475",
+                          width: "100%",
                         }}
                       >
                         <img
@@ -4737,7 +4739,7 @@ export default function MerchantPage({
                           alt={activeVision.title}
                           style={{
                             width: "100%",
-                            maxHeight: 215,
+                            height: "100%",
                             objectFit: "cover",
                             display: "block",
                           }}
